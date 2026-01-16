@@ -1,0 +1,16 @@
+version: "3.8"
+
+services:
+  bot:
+    build: .
+    container_name: digital-store-bot
+    restart: unless-stopped
+    ports:
+      - "${WEBHOOK_PORT:-5000}:5000"
+    volumes:
+      - ./store.db:/app/store.db
+      - ./products:/app/products
+    env_file:
+      - .env
+    environment:
+      - TZ=Asia/Jakarta
