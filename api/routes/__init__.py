@@ -7,6 +7,7 @@ from .bots import bots_bp
 from .products import products_bp
 from .transactions import transactions_bp
 from .broadcast import broadcast_bp
+from .sheerid import sheerid_bp
 
 __all__ = [
     'auth_bp',
@@ -14,4 +15,6 @@ __all__ = [
     'products_bp',
     'transactions_bp',
     'broadcast_bp',
+    'sheerid_bp',
 ]
+

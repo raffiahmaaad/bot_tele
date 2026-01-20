@@ -131,6 +131,61 @@ def update_schema():
             )
         """)
         
+        # ==================== SHEERID VERIFICATION TABLES ====================
+        print("   Creating SheerID verification tables...")
+        
+        # SheerID Verifications table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS sheerid_verifications (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+                
+                verify_type VARCHAR(50) NOT NULL,
+                verify_url TEXT NOT NULL,
+                verify_id VARCHAR(100),
+                
+                status VARCHAR(20) DEFAULT 'pending',
+                result_message TEXT,
+                student_name VARCHAR(100),
+                student_email VARCHAR(255),
+                school_name VARCHAR(255),
+                redirect_url TEXT,
+                
+                points_cost INTEGER DEFAULT 5,
+                points_paid BOOLEAN DEFAULT false,
+                
+                created_at TIMESTAMP DEFAULT NOW(),
+                processed_at TIMESTAMP,
+                error_details TEXT
+            )
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_sheerid_verifications_user 
+            ON sheerid_verifications(user_id)
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_sheerid_verifications_status 
+            ON sheerid_verifications(status)
+        """)
+        
+        # SheerID Settings table (proxy config)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS sheerid_settings (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+                
+                proxy_enabled BOOLEAN DEFAULT false,
+                proxy_host VARCHAR(255),
+                proxy_port INTEGER,
+                proxy_username VARCHAR(255),
+                proxy_password VARCHAR(255),
+                
+                default_points_cost INTEGER DEFAULT 5,
+                
+                updated_at TIMESTAMP DEFAULT NOW()
+            )
+        """)
+        
         conn.commit()
         print("✅ Schema updated successfully!")
         return True

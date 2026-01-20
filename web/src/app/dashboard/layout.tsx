@@ -129,22 +129,11 @@ const botTypeSections = [
   },
   {
     type: "verification",
-    name: "Verification Bots",
+    name: "SheerID Verify",
     color: "green",
     routes: [
-      { name: "Daftar Bot", href: "/dashboard/verification" },
-      { name: "Pending", href: "/dashboard/verification/pending" },
-    ],
-  },
-  {
-    type: "points_verify",
-    name: "Points Verify Bots",
-    color: "purple",
-    routes: [
-      { name: "Daftar Bot", href: "/dashboard/points-verify" },
-      { name: "Users", href: "/dashboard/points-verify/users" },
-      { name: "Verifikasi", href: "/dashboard/points-verify/verifications" },
-      { name: "Card Keys", href: "/dashboard/points-verify/keys" },
+      { name: "Submit Verifikasi", href: "/dashboard/verification" },
+      { name: "Riwayat", href: "/dashboard/verification/history" },
     ],
   },
 ];

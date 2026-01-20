@@ -29,3 +29,9 @@ products/
 
 # Logs
 *.log
+logs/
+
+# Node.js
+node_modules/
+.next/
+.turbo/

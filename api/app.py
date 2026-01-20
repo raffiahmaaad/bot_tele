@@ -17,7 +17,7 @@ from datetime import timedelta
 
 from config import config
 from database import init_database
-from routes import auth_bp, bots_bp, products_bp, transactions_bp, broadcast_bp
+from routes import auth_bp, bots_bp, products_bp, transactions_bp, broadcast_bp, sheerid_bp
 
 
 def create_app():
@@ -38,6 +38,7 @@ def create_app():
     app.register_blueprint(products_bp)
     app.register_blueprint(transactions_bp)
     app.register_blueprint(broadcast_bp)
+    app.register_blueprint(sheerid_bp)
     
     # Health check endpoint
     @app.route('/health')

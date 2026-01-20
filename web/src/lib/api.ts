@@ -2,6 +2,7 @@
  * API Client for BotStore Backend
  */
 
+declare const process: { env: { NEXT_PUBLIC_API_URL?: string } };
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001/api';
 
 interface ApiResponse<T> {
@@ -167,11 +168,155 @@ class ApiClient {
   }
 
   async sendBroadcast(botId: number, message: string) {
-    return this.request<{ broadcast: any }>(`/bots/${botId}/broadcast`, {
+    return this.request<{ broadcast: any; message?: string }>(`/bots/${botId}/broadcast`, {
       method: 'POST',
       body: JSON.stringify({ message }),
     });
   }
+
+  // ==================== SHEERID VERIFICATION ====================
+
+  async getSheerIDTypes() {
+    return this.request<{ types: SheerIDType[] }>('/sheerid/types');
+  }
+
+  async checkSheerIDLink(url: string, type: string) {
+    return this.request<{ valid: boolean; error?: string; step?: string }>('/sheerid/check-link', {
+      method: 'POST',
+      body: JSON.stringify({ url, type }),
+    });
+  }
+
+  async submitSheerIDVerification(url: string, type: string) {
+    return this.request<SheerIDVerificationResult>('/sheerid/verify', {
+      method: 'POST',
+      body: JSON.stringify({ url, type }),
+    });
+  }
+
+  async getSheerIDVerifications() {
+    return this.request<{ verifications: SheerIDVerification[] }>('/sheerid/verifications');
+  }
+
+  async getSheerIDVerification(id: number) {
+    return this.request<{ verification: SheerIDVerification }>(`/sheerid/verifications/${id}`);
+  }
+
+  async getSheerIDSettings() {
+    return this.request<{ settings: SheerIDSettings }>('/sheerid/settings');
+  }
+
+  async saveSheerIDSettings(settings: Partial<SheerIDSettings>) {
+    return this.request<{ message: string; settings: SheerIDSettings }>('/sheerid/settings', {
+      method: 'POST',
+      body: JSON.stringify(settings),
+    });
+  }
+
+  async ipLookup() {
+    return this.request<IPLookupResult>('/sheerid/ip-lookup');
+  }
+
+  async proxyCheck(host: string, port: number, username?: string, password?: string) {
+    return this.request<ProxyCheckResult>('/sheerid/proxy-check', {
+      method: 'POST',
+      body: JSON.stringify({ host, port, username, password }),
+    });
+  }
+
+  async checkVerificationStatus(verificationId: number) {
+    return this.request<VerificationStatusResult>(`/sheerid/verifications/${verificationId}/status`);
+  }
+}
+
+// Verification Status Result (real-time from SheerID)
+export interface VerificationStatusResult {
+  success: boolean;
+  approved?: boolean;
+  status?: string;
+  status_display?: string;
+  message?: string;
+  redirect_url?: string;
+  claim_url?: string;
+  credits?: number;
+  verify_type?: string;
+  verification_id?: number;
+  error?: string;
+}
+
+// IP Lookup Result
+export interface IPLookupResult {
+  success: boolean;
+  ip?: string;
+  city?: string;
+  region?: string;
+  country?: string;
+  country_code?: string;
+  isp?: string;
+  timezone?: string;
+  source?: string;
+  error?: string;
+}
+
+// Proxy Check Result
+export interface ProxyCheckResult {
+  success: boolean;
+  valid?: boolean;
+  ip?: string;
+  city?: string;
+  region?: string;
+  country?: string;
+  country_code?: string;
+  isp?: string;
+  timezone?: string;
+  message?: string;
+  error?: string;
+}
+
+// SheerID Types
+export interface SheerIDType {
+  id: string;
+  name: string;
+  cost: number;
+  icon: string;
+}
+
+export interface SheerIDVerification {
+  id: number;
+  verify_type: string;
+  verify_url: string;
+  verify_id: string;
+  status: string;
+  result_message?: string;
+  student_name?: string;
+  student_email?: string;
+  school_name?: string;
+  redirect_url?: string;
+  points_cost: number;
+  created_at: string;
+  processed_at?: string;
+  error_details?: string;
+}
+
+export interface SheerIDVerificationResult {
+  success: boolean;
+  message?: string;
+  error?: string;
+  verification_id: number;
+  student_name?: string;
+  student_email?: string;
+  school_name?: string;
+  redirect_url?: string;
+  points_cost?: number;
+}
+
+export interface SheerIDSettings {
+  proxy_enabled: boolean;
+  proxy_host?: string;
+  proxy_port?: number;
+  proxy_username?: string;
+  proxy_password?: string;
+  default_points_cost: number;
 }
 
 // Singleton instance
