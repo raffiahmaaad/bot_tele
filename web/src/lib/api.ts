@@ -1,9 +1,22 @@
 /**
  * API Client for BotStore Backend
+ * Uses local /api proxy in production to avoid mixed content issues
  */
 
 declare const process: { env: { NEXT_PUBLIC_API_URL?: string } };
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001/api';
+
+// In browser: use local proxy to avoid mixed content (HTTPS → HTTP)
+// On server: use direct backend URL
+const getApiBaseUrl = () => {
+  if (typeof window !== 'undefined') {
+    // Browser: use local proxy
+    return '/api';
+  }
+  // Server-side: use env var or fallback
+  return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001/api';
+};
+
+const API_BASE_URL = getApiBaseUrl();
 
 interface ApiResponse<T> {
   data?: T;
