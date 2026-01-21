@@ -248,10 +248,73 @@ export default function VerificationPage() {
   const handleIPLookup = async () => {
     setIsLoadingIP(true);
     setCurrentIP(null);
-    const result = await api.ipLookup();
-    if (result.data) {
-      setCurrentIP(result.data);
+
+    // Fetch IP directly from browser (not through backend) to get user's real IP
+    try {
+      // Try ipapi.co first
+      let response = await fetch("https://ipapi.co/json/", {
+        method: "GET",
+        cache: "no-store",
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setCurrentIP({
+          success: true,
+          ip: data.ip,
+          city: data.city,
+          region: data.region,
+          country: data.country_name,
+          country_code: data.country_code,
+          isp: data.org,
+          timezone: data.timezone,
+          source: "ipapi.co",
+        });
+        setIsLoadingIP(false);
+        return;
+      }
+
+      // Fallback to ipinfo.io
+      response = await fetch("https://ipinfo.io/json", {
+        method: "GET",
+        cache: "no-store",
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setCurrentIP({
+          success: true,
+          ip: data.ip,
+          city: data.city,
+          region: data.region,
+          country: data.country,
+          isp: data.org,
+          timezone: data.timezone,
+          source: "ipinfo.io",
+        });
+        setIsLoadingIP(false);
+        return;
+      }
+
+      // Last fallback to ipify
+      response = await fetch("https://api.ipify.org?format=json", {
+        method: "GET",
+        cache: "no-store",
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setCurrentIP({
+          success: true,
+          ip: data.ip,
+          source: "ipify.org",
+        });
+      }
+    } catch (error) {
+      console.error("IP lookup error:", error);
+      setCurrentIP({ success: false, error: "Could not fetch IP" });
     }
+
     setIsLoadingIP(false);
   };
 
