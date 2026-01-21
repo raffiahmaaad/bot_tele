@@ -747,3 +747,72 @@ def get_all_bot_commands(bot_id: int) -> list[dict]:
             ORDER BY command_name
         """, (bot_id,))
         return [dict(row) for row in cursor.fetchall()]
+
+
+# ==================== PROXY OPERATIONS ====================
+
+def get_active_proxy_for_user(user_id: int) -> Optional[str]:
+    """
+    Get the active proxy URL for a user from dashboard settings.
+    Returns proxy URL in format: http://user:pass@host:port or http://host:port
+    Returns None if no active proxy.
+    """
+    with get_cursor() as cursor:
+        # First check user_proxies table (multi-proxy system)
+        cursor.execute("""
+            SELECT host, port, username, password 
+            FROM user_proxies 
+            WHERE user_id = %s AND is_active = true
+            LIMIT 1
+        """, (user_id,))
+        row = cursor.fetchone()
+        
+        if row:
+            host = row['host']
+            port = row['port']
+            username = row['username']
+            password = row['password']
+            
+            if username:
+                return f"http://{username}:{password or ''}@{host}:{port}"
+            else:
+                return f"http://{host}:{port}"
+        
+        # Fallback to sheerid_settings (single proxy system)
+        cursor.execute("""
+            SELECT proxy_enabled, proxy_host, proxy_port, proxy_username, proxy_password
+            FROM sheerid_settings
+            WHERE user_id = %s
+        """, (user_id,))
+        row = cursor.fetchone()
+        
+        if row and row.get('proxy_enabled') and row.get('proxy_host'):
+            host = row['proxy_host']
+            port = row.get('proxy_port', 80)
+            username = row.get('proxy_username')
+            password = row.get('proxy_password')
+            
+            if username:
+                return f"http://{username}:{password or ''}@{host}:{port}"
+            else:
+                return f"http://{host}:{port}"
+        
+        return None
+
+
+def get_owner_proxy() -> Optional[str]:
+    """
+    Get active proxy for the owner (OWNER_TELEGRAM_ID).
+    Looks up the owner's user_id and returns their active proxy.
+    """
+    with get_cursor() as cursor:
+        # Get owner's user_id from users table
+        cursor.execute("""
+            SELECT id FROM users WHERE telegram_id = %s
+        """, (OWNER_TELEGRAM_ID,))
+        row = cursor.fetchone()
+        
+        if row:
+            return get_active_proxy_for_user(row['id'])
+        
+        return None

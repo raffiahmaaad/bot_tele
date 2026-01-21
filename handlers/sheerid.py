@@ -229,8 +229,15 @@ async def sheerid_receive_url(update: Update, context: ContextTypes.DEFAULT_TYPE
     )
     
     try:
-        # Run verification
-        verifier = SheerIDVerifier(url, verify_type)
+        # Get owner's proxy from dashboard settings
+        from database_pg import get_owner_proxy
+        proxy = get_owner_proxy()
+        
+        if proxy:
+            logger.info(f"Using proxy from dashboard for verification")
+        
+        # Run verification with proxy
+        verifier = SheerIDVerifier(url, verify_type, proxy=proxy)
         result = verifier.verify()
         
         if result.get('success'):
