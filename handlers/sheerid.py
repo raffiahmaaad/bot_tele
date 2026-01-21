@@ -5,6 +5,7 @@ Handles verification commands and callbacks.
 
 import re
 import logging
+from io import BytesIO
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, ConversationHandler
 
@@ -15,7 +16,7 @@ from database_pg import (
     add_pv_verification,
     get_pv_user_verifications
 )
-from services.sheerid import VERIFY_TYPES, SheerIDVerifier
+from services.sheerid import VERIFY_TYPES, SheerIDVerifier, generate_preview_document
 
 logger = logging.getLogger(__name__)
 
@@ -172,6 +173,7 @@ async def sheerid_type_selected(update: Update, context: ContextTypes.DEFAULT_TY
         text,
         parse_mode="Markdown",
         reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("👁️ Preview Dokumen", callback_data=f"sheerid_preview_{type_id}")],
             [InlineKeyboardButton("❌ Batal", callback_data="sheerid_cancel")]
         ])
     )
@@ -478,6 +480,68 @@ async def sheerid_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 
+async def sheerid_preview_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Send preview of document that will be generated for verification."""
+    query = update.callback_query
+    await query.answer("Generating preview...")
+    
+    # Extract type from callback data (sheerid_preview_youtube -> youtube)
+    type_id = query.data.replace("sheerid_preview_", "")
+    type_config = VERIFY_TYPES.get(type_id)
+    
+    if not type_config:
+        await query.edit_message_text("❌ Tipe verifikasi tidak valid.")
+        return
+    
+    try:
+        # Generate preview document
+        doc_bytes, info = generate_preview_document(type_id)
+        
+        # Create BytesIO for sending photo
+        doc_file = BytesIO(doc_bytes)
+        doc_file.name = "document_preview.png"
+        
+        # Send photo with info
+        caption = (
+            f"👁️ *Preview Dokumen*\n\n"
+            f"📋 *Tipe:* {info['verify_name']}\n"
+            f"👤 *Nama:* {info['student_name']}\n"
+            f"📧 *Email:* {info['student_email']}\n"
+            f"🏫 *Institusi:* {info['school_name']}\n"
+            f"📄 *Jenis:* {'Teacher Certificate' if info['document_type'] == 'teacher_certificate' else 'Student ID'}\n\n"
+            f"⚠️ _Data ini di-generate secara random. Setiap verifikasi akan menggunakan data berbeda._\n\n"
+            f"Kirim URL SheerID untuk melanjutkan verifikasi:"
+        )
+        
+        # Delete old message first
+        await query.message.delete()
+        
+        # Send new photo message
+        await context.bot.send_photo(
+            chat_id=query.message.chat_id,
+            photo=doc_file,
+            caption=caption,
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("🔄 Generate Ulang", callback_data=f"sheerid_preview_{type_id}")],
+                [InlineKeyboardButton("❌ Batal", callback_data="sheerid_cancel")]
+            ])
+        )
+        
+        # Keep type stored for URL handler
+        context.user_data['sheerid_type'] = type_id
+        context.user_data['sheerid_cost'] = type_config['cost']
+        
+    except Exception as e:
+        logger.error(f"Preview error: {e}")
+        await query.edit_message_text(
+            f"❌ Gagal generate preview: {str(e)}",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("🔙 Kembali", callback_data="menu_sheerid")]
+            ])
+        )
+
+
 def create_main_menu_keyboard() -> InlineKeyboardMarkup:
     """Create main menu keyboard for SheerID bot."""
     keyboard = [
@@ -730,6 +794,7 @@ def get_sheerid_handlers(bot_id: int) -> list:
         CallbackQueryHandler(sheerid_menu, pattern="^menu_sheerid$"),
         CallbackQueryHandler(sheerid_new_verification, pattern="^sheerid_new$"),
         CallbackQueryHandler(sheerid_type_selected, pattern="^sheerid_type_"),
+        CallbackQueryHandler(sheerid_preview_document, pattern="^sheerid_preview_"),
         CallbackQueryHandler(sheerid_history, pattern="^sheerid_history$"),
         CallbackQueryHandler(sheerid_cancel, pattern="^sheerid_cancel$"),
         CallbackQueryHandler(balance_command, pattern="^sheerid_balance$"),

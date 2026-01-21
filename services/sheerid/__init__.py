@@ -855,3 +855,46 @@ def get_claim_url(verify_type: str) -> str:
     """Get claim URL for verification type"""
     return CLAIM_URLS.get(verify_type, "")
 
+
+def generate_preview_document(verify_type: str = "youtube") -> Tuple[bytes, Dict]:
+    """
+    Generate preview document for SheerID verification.
+    This allows users to see what document will be submitted before actual verification.
+    
+    Args:
+        verify_type: Type of verification (youtube, spotify, boltnew, k12, etc)
+    
+    Returns:
+        Tuple of (document_bytes, info_dict) where info_dict contains:
+        - student_name: Generated name
+        - student_email: Generated email
+        - school_name: Selected university name
+        - document_type: 'student_id' or 'teacher_certificate'
+    """
+    config = VERIFY_TYPES.get(verify_type, VERIFY_TYPES['youtube'])
+    strategy = config.get("strategy", "student")
+    
+    # Generate random identity
+    first, last = generate_name()
+    org = select_university(verify_type)
+    email = generate_email(first, last, org["domain"])
+    
+    # Generate document based on strategy
+    if strategy in ["teacher", "k12"]:
+        doc = generate_teacher_certificate(first, last, org["name"])
+        doc_type = "teacher_certificate"
+    else:
+        doc = generate_student_id(first, last, org["name"])
+        doc_type = "student_id"
+    
+    info = {
+        "student_name": f"{first} {last}",
+        "student_email": email,
+        "school_name": org["name"],
+        "document_type": doc_type,
+        "verify_type": verify_type,
+        "verify_name": config["name"]
+    }
+    
+    return doc, info
+
