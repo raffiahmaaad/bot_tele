@@ -42,6 +42,12 @@ export default function BotSettingsPage() {
   const [pakasirSlug, setPakasirSlug] = useState("");
   const [pakasirApiKey, setPakasirApiKey] = useState("");
   const [isActive, setIsActive] = useState(true);
+  const [isTesting, setIsTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{
+    valid?: boolean;
+    message?: string;
+    error?: string;
+  } | null>(null);
 
   useEffect(() => {
     fetchBot();
@@ -60,6 +66,37 @@ export default function BotSettingsPage() {
       setIsActive(b.is_active);
     }
     setIsLoading(false);
+  };
+
+  const testPakasir = async () => {
+    // Use current form values, or fallback to saved bot values
+    const slugToTest = pakasirSlug || bot?.pakasir_slug || "";
+    const keyToTest = pakasirApiKey || ""; // For test, we need the new key if provided
+
+    if (!slugToTest) {
+      setTestResult({ valid: false, error: "Project Slug belum diisi" });
+      return;
+    }
+
+    // If no new key provided but bot has existing key, just validate connection
+    if (!keyToTest && !bot?.pakasir_api_key) {
+      setTestResult({ valid: false, error: "API Key belum diisi" });
+      return;
+    }
+
+    setIsTesting(true);
+    setTestResult(null);
+
+    const result = await api.testPakasir(slugToTest, keyToTest || "existing");
+    if (result.data) {
+      setTestResult(result.data);
+    } else {
+      setTestResult({
+        valid: false,
+        error: result.error || "Gagal test koneksi",
+      });
+    }
+    setIsTesting(false);
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -325,6 +362,31 @@ export default function BotSettingsPage() {
                 </p>
               </div>
             </div>
+
+            {/* Test Connection Button */}
+            <button
+              type="button"
+              onClick={testPakasir}
+              disabled={isTesting || (!pakasirSlug && !bot.pakasir_slug)}
+              className="w-full px-4 py-2 rounded-lg bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/50 text-blue-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isTesting ? "⏳ Testing..." : "🔌 Test Koneksi Pakasir"}
+            </button>
+
+            {/* Test Result */}
+            {testResult && (
+              <div
+                className={`p-3 rounded-lg text-sm ${
+                  testResult.valid
+                    ? "bg-green-500/10 border border-green-500/30 text-green-400"
+                    : "bg-red-500/10 border border-red-500/30 text-red-400"
+                }`}
+              >
+                {testResult.valid
+                  ? `✅ ${testResult.message}`
+                  : `❌ ${testResult.error}`}
+              </div>
+            )}
           </div>
         )}
 

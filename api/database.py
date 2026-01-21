@@ -156,6 +156,24 @@ def init_database():
             )
         """)
         
+        # Bot Commands (custom command responses)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS bot_commands (
+                id SERIAL PRIMARY KEY,
+                bot_id INTEGER REFERENCES bots(id) ON DELETE CASCADE,
+                command_name VARCHAR(50) NOT NULL,
+                response_text TEXT,
+                is_enabled BOOLEAN DEFAULT true,
+                created_at TIMESTAMP DEFAULT NOW(),
+                UNIQUE(bot_id, command_name)
+            )
+        """)
+        
+        # Add last_name column to bot_users if missing
+        cursor.execute("""
+            ALTER TABLE bot_users ADD COLUMN IF NOT EXISTS last_name VARCHAR(100)
+        """)
+        
         print("✅ Database initialized successfully")
 
 

@@ -173,6 +173,19 @@ class ApiClient {
     });
   }
 
+  async updateProduct(botId: number, productId: number, data: any) {
+    return this.request<{ product: any }>(`/bots/${botId}/products/${productId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteProduct(botId: number, productId: number) {
+    return this.request<{ message: string }>(`/bots/${botId}/products/${productId}`, {
+      method: 'DELETE',
+    });
+  }
+
   async addProductStock(productId: number, stockItems: string[]) {
     return this.request<{ added_count: number }>(`/products/${productId}/stock`, {
       method: 'POST',
@@ -184,6 +197,25 @@ class ApiClient {
 
   async getTransactions(botId: number) {
     return this.request<{ transactions: any[]; stats: any }>(`/bots/${botId}/transactions`);
+  }
+
+  // ==================== BOT USERS ====================
+
+  async getBotUsers(botId: number) {
+    return this.request<{ users: any[] }>(`/bots/${botId}/users`);
+  }
+
+  // ==================== BOT COMMANDS ====================
+
+  async getBotCommands(botId: number) {
+    return this.request<{ commands: any[] }>(`/bots/${botId}/commands`);
+  }
+
+  async saveBotCommand(botId: number, data: { command_name: string; response_text: string; is_enabled: boolean }) {
+    return this.request<{ command: any }>(`/bots/${botId}/commands`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
   }
 
   // ==================== BROADCAST ====================

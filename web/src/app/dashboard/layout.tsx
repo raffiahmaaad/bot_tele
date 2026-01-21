@@ -125,6 +125,8 @@ const botTypeSections = [
       { name: "Daftar Bot", href: "/dashboard/store" },
       { name: "Produk", href: "/dashboard/store/products" },
       { name: "Transaksi", href: "/dashboard/store/transactions" },
+      { name: "Users", href: "/dashboard/store/users" },
+      { name: "Commands", href: "/dashboard/store/commands" },
     ],
   },
   {
@@ -134,6 +136,7 @@ const botTypeSections = [
     routes: [
       { name: "Submit Verifikasi", href: "/dashboard/verification" },
       { name: "Riwayat", href: "/dashboard/verification/history" },
+      { name: "Commands", href: "/dashboard/verification/commands" },
     ],
   },
 ];
