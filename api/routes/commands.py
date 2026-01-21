@@ -116,7 +116,7 @@ def get_bot_users(bot_id: int):
     
     with get_cursor() as cursor:
         cursor.execute("""
-            SELECT id, telegram_id, username, first_name, last_name, is_blocked, created_at
+            SELECT id, telegram_id, username, first_name, is_blocked, created_at
             FROM bot_users
             WHERE bot_id = %s
             ORDER BY created_at DESC
@@ -130,7 +130,7 @@ def get_bot_users(bot_id: int):
                 'telegram_id': str(u['telegram_id']),
                 'username': u['username'],
                 'first_name': u['first_name'],
-                'last_name': u['last_name'],
+                'last_name': None,  # Column doesn't exist in current schema
                 'is_blocked': u['is_blocked'],
                 'created_at': u['created_at'].isoformat() if u['created_at'] else None
             }

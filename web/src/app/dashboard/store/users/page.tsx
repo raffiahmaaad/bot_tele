@@ -33,6 +33,9 @@ export default function StoreUsersPage() {
   useEffect(() => {
     if (selectedBot) {
       fetchUsers();
+      // Auto-refresh every 30 seconds for realtime data
+      const interval = setInterval(fetchUsers, 30000);
+      return () => clearInterval(interval);
     }
   }, [selectedBot]);
 
@@ -86,6 +89,13 @@ export default function StoreUsersPage() {
               </option>
             ))}
           </select>
+          <button
+            onClick={fetchUsers}
+            className="px-3 py-2 rounded-lg bg-[var(--bg-card)] border border-[var(--border-color)] hover:bg-white/10 transition-colors"
+            title="Refresh data"
+          >
+            🔄
+          </button>
         </div>
       </div>
 
@@ -139,7 +149,7 @@ export default function StoreUsersPage() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-medium truncate">
-                    {user.first_name} {user.last_name}
+                    {user.first_name} {user.last_name || ""}
                   </p>
                   <p className="text-sm text-[var(--text-muted)] truncate">
                     @{user.username || "no_username"}

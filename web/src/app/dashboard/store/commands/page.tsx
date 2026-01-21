@@ -67,6 +67,9 @@ export default function StoreCommandsPage() {
   useEffect(() => {
     if (selectedBot) {
       fetchCommands();
+      // Auto-refresh every 30 seconds for realtime data
+      const interval = setInterval(fetchCommands, 30000);
+      return () => clearInterval(interval);
     }
   }, [selectedBot]);
 
@@ -161,17 +164,26 @@ export default function StoreCommandsPage() {
             Atur respons bot untuk setiap command
           </p>
         </div>
-        <select
-          value={selectedBot || ""}
-          onChange={(e) => setSelectedBot(Number(e.target.value))}
-          className="px-4 py-2 rounded-lg bg-[var(--bg-card)] border border-[var(--border-color)]"
-        >
-          {bots.map((bot) => (
-            <option key={bot.id} value={bot.id}>
-              {bot.bot_name} ({bot.bot_username})
-            </option>
-          ))}
-        </select>
+        <div className="flex gap-3">
+          <select
+            value={selectedBot || ""}
+            onChange={(e) => setSelectedBot(Number(e.target.value))}
+            className="px-4 py-2 rounded-lg bg-[var(--bg-card)] border border-[var(--border-color)]"
+          >
+            {bots.map((bot) => (
+              <option key={bot.id} value={bot.id}>
+                {bot.bot_name} ({bot.bot_username})
+              </option>
+            ))}
+          </select>
+          <button
+            onClick={fetchCommands}
+            className="px-3 py-2 rounded-lg bg-[var(--bg-card)] border border-[var(--border-color)] hover:bg-white/10 transition-colors"
+            title="Refresh data"
+          >
+            🔄
+          </button>
+        </div>
       </div>
 
       {success && (

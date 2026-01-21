@@ -34,6 +34,9 @@ export default function StoreTransactionsPage() {
   useEffect(() => {
     if (selectedBot) {
       fetchTransactions();
+      // Auto-refresh every 30 seconds for realtime data
+      const interval = setInterval(fetchTransactions, 30000);
+      return () => clearInterval(interval);
     }
   }, [selectedBot]);
 
@@ -95,17 +98,26 @@ export default function StoreTransactionsPage() {
             Riwayat transaksi Store Bot
           </p>
         </div>
-        <select
-          value={selectedBot || ""}
-          onChange={(e) => setSelectedBot(Number(e.target.value))}
-          className="px-4 py-2 rounded-lg bg-[var(--bg-card)] border border-[var(--border-color)]"
-        >
-          {bots.map((bot) => (
-            <option key={bot.id} value={bot.id}>
-              {bot.bot_name} ({bot.bot_username})
-            </option>
-          ))}
-        </select>
+        <div className="flex gap-3">
+          <select
+            value={selectedBot || ""}
+            onChange={(e) => setSelectedBot(Number(e.target.value))}
+            className="px-4 py-2 rounded-lg bg-[var(--bg-card)] border border-[var(--border-color)]"
+          >
+            {bots.map((bot) => (
+              <option key={bot.id} value={bot.id}>
+                {bot.bot_name} ({bot.bot_username})
+              </option>
+            ))}
+          </select>
+          <button
+            onClick={fetchTransactions}
+            className="px-3 py-2 rounded-lg bg-[var(--bg-card)] border border-[var(--border-color)] hover:bg-white/10 transition-colors"
+            title="Refresh data"
+          >
+            🔄
+          </button>
+        </div>
       </div>
 
       {/* Stats */}
