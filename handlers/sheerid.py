@@ -241,11 +241,15 @@ async def sheerid_receive_url(update: Update, context: ContextTypes.DEFAULT_TYPE
         # Get owner's proxy from dashboard settings
         from database_pg import get_owner_proxy, OWNER_TELEGRAM_ID
         import os
+        import httpx
         
         owner_user_id = os.getenv("OWNER_USER_ID", "Not Set")
         proxy = get_owner_proxy()
         
-        # Detailed proxy logging
+        # Detailed proxy logging with IP geolocation
+        proxy_location = ""
+        proxy_ip = ""
+        
         if proxy:
             # Mask password in proxy URL for display
             proxy_display = proxy
@@ -255,13 +259,38 @@ async def sheerid_receive_url(update: Update, context: ContextTypes.DEFAULT_TYPE
                 if len(auth_parts) >= 2:
                     proxy_display = f"http://{auth_parts[0]}:****@{parts[1]}"
             
+            # Try to get proxy IP and location
+            try:
+                client = httpx.Client(proxy=proxy, timeout=10)
+                resp = client.get("https://ipapi.co/json/")
+                if resp.status_code == 200:
+                    ip_data = resp.json()
+                    proxy_ip = ip_data.get("ip", "Unknown")
+                    city = ip_data.get("city", "")
+                    country = ip_data.get("country_name", "")
+                    country_code = ip_data.get("country_code", "")
+                    
+                    if city and country:
+                        proxy_location = f"📍 {city}, {country} ({country_code})"
+                    elif country:
+                        proxy_location = f"📍 {country} ({country_code})"
+                    
+                    logger.info(f"[VERIFY] Proxy IP: {proxy_ip} - Location: {city}, {country}")
+                client.close()
+            except Exception as e:
+                logger.warning(f"[VERIFY] Could not get proxy IP info: {e}")
+                proxy_location = "📍 Location unknown"
+            
             proxy_status = f"✅ Proxy Aktif"
-            proxy_info = f"🌐 {proxy_display}"
+            if proxy_location:
+                proxy_status += f"\n{proxy_location}"
+            if proxy_ip:
+                proxy_status += f"\n🔗 IP: {proxy_ip}"
+            
             logger.info(f"[VERIFY] User {user.id} - Using proxy: {proxy_display}")
             logger.info(f"[VERIFY] OWNER_USER_ID={owner_user_id}, OWNER_TELEGRAM_ID={OWNER_TELEGRAM_ID}")
         else:
-            proxy_status = "⚠️ Tanpa Proxy"
-            proxy_info = "🌐 Direct Connection (No Proxy)"
+            proxy_status = "⚠️ Tanpa Proxy (Direct Connection)"
             logger.warning(f"[VERIFY] User {user.id} - NO PROXY CONFIGURED!")
             logger.warning(f"[VERIFY] OWNER_USER_ID={owner_user_id} - Check if proxy is activated in dashboard")
         
@@ -270,7 +299,7 @@ async def sheerid_receive_url(update: Update, context: ContextTypes.DEFAULT_TYPE
             f"⏳ *Memproses Verifikasi...*\n\n"
             f"Tipe: {VERIFY_TYPES[verify_type]['name']}\n"
             f"ID: `{verify_id[:8]}...`\n"
-            f"🕐 Mulai: {submit_time_str}\n"
+            f"🕐 Mulai: {submit_time_str}\n\n"
             f"{proxy_status}\n\n"
             f"Mohon tunggu...",
             parse_mode="Markdown"
