@@ -21,7 +21,6 @@ class Config:
     # CORS
     CORS_ORIGINS: list[str] = [
         "http://localhost:3000",
-        "https://botstore.vercel.app",
         "https://bot-teleraf.vercel.app",
     ]
     
