@@ -567,12 +567,17 @@ export default function VerificationPage() {
                 <div className="md:col-span-2">
                   <label className="block text-xs font-medium mb-1">
                     Password
+                    {editingProxy && editingProxy.username && (
+                      <span className="text-gray-400 font-normal ml-2">
+                        (kosongkan jika tidak ingin mengubah)
+                      </span>
+                    )}
                   </label>
                   <input
                     type="password"
                     value={newProxyPassword}
                     onChange={(e) => setNewProxyPassword(e.target.value)}
-                    placeholder="••••••••"
+                    placeholder={editingProxy ? "••••••••" : "password"}
                     className="w-full px-3 py-2 text-sm bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
@@ -700,6 +705,8 @@ export default function VerificationPage() {
                       {proxyTestResults[proxy.id].valid ? (
                         <span>
                           ✅ Working! IP: {proxyTestResults[proxy.id].ip} (
+                          {proxyTestResults[proxy.id].city &&
+                            `${proxyTestResults[proxy.id].city}, `}
                           {proxyTestResults[proxy.id].country})
                         </span>
                       ) : (

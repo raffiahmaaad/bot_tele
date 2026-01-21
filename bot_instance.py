@@ -53,6 +53,8 @@ class BotInstance:
             self._register_verification_handlers()
         elif self.bot_type == 'points_verify':
             self._register_points_verify_handlers()
+        elif self.bot_type == 'sheerid':
+            self._register_sheerid_handlers()
         else:
             self._register_custom_handlers()
     
@@ -83,6 +85,16 @@ class BotInstance:
             self.app.add_handler(handler)
         
         logger.info(f"[{self.bot_username}] Points verification handlers registered")
+    
+    def _register_sheerid_handlers(self):
+        """Register SheerID verification bot handlers."""
+        from handlers.sheerid import get_sheerid_handlers
+        
+        # Register SheerID handlers (includes /start, /verify, and all callbacks)
+        for handler in get_sheerid_handlers(self.bot_id):
+            self.app.add_handler(handler)
+        
+        logger.info(f"[{self.bot_username}] SheerID verification handlers registered")
     
     def _register_custom_handlers(self):
         """Register minimal custom bot handlers."""
