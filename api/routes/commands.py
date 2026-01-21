@@ -4,9 +4,10 @@ Bot Commands API routes.
 
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from ..database import get_cursor, get_bot_by_id
 
-commands_bp = Blueprint('commands', __name__)
+from database import get_cursor, get_bot_by_id
+
+commands_bp = Blueprint('commands', __name__, url_prefix='/api')
 
 
 @commands_bp.route('/bots/<int:bot_id>/commands', methods=['GET'])
