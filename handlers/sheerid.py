@@ -256,25 +256,53 @@ async def sheerid_receive_url(update: Update, context: ContextTypes.DEFAULT_TYPE
         )
         
         if result.get('success'):
-            # Success
             student_name = result.get('student_name', 'N/A')
-            await processing_msg.edit_text(
-                f"✅ *Verifikasi Berhasil!*\n\n"
-                f"Tipe: {VERIFY_TYPES[verify_type]['name']}\n"
-                f"Nama: {student_name}\n"
-                f"Biaya: {cost} poin\n\n"
-                f"🎉 Silakan kembali ke layanan untuk klaim benefit!",
-                parse_mode="Markdown",
-                reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("🔙 Menu SheerID", callback_data="menu_sheerid")]
-                ])
-            )
+            final_step = result.get('final_step', 'pending')
             
-            # Record success
-            add_pv_verification(
-                bot_id, user.id, verify_type, url, 
-                "success", result.get('message', 'Success'), verify_id
-            )
+            # Check actual status from SheerID
+            if final_step == 'success':
+                # Actually approved!
+                await processing_msg.edit_text(
+                    f"✅ *Verifikasi Berhasil!*\n\n"
+                    f"Tipe: {VERIFY_TYPES[verify_type]['name']}\n"
+                    f"Nama: {student_name}\n"
+                    f"Biaya: {cost} poin\n"
+                    f"🌐 {proxy_status}\n\n"
+                    f"🎉 Silakan kembali ke layanan untuk klaim benefit!",
+                    parse_mode="Markdown",
+                    reply_markup=InlineKeyboardMarkup([
+                        [InlineKeyboardButton("🔙 Menu SheerID", callback_data="menu_sheerid")]
+                    ])
+                )
+                
+                # Record as success
+                add_pv_verification(
+                    bot_id, user.id, verify_type, url, 
+                    "success", result.get('message', 'Approved'), verify_id
+                )
+            else:
+                # Pending review - NOT approved yet
+                await processing_msg.edit_text(
+                    f"⏳ *Verifikasi Dalam Review*\n\n"
+                    f"Tipe: {VERIFY_TYPES[verify_type]['name']}\n"
+                    f"Nama: {student_name}\n"
+                    f"Biaya: {cost} poin\n"
+                    f"🌐 {proxy_status}\n\n"
+                    f"📋 Status: *PENDING* (Dalam Review)\n"
+                    f"⏰ Estimasi: 24-48 jam\n\n"
+                    f"Dokumen berhasil disubmit, menunggu verifikasi manual dari SheerID.\n"
+                    f"Cek status secara berkala di layanan terkait.",
+                    parse_mode="Markdown",
+                    reply_markup=InlineKeyboardMarkup([
+                        [InlineKeyboardButton("🔙 Menu SheerID", callback_data="menu_sheerid")]
+                    ])
+                )
+                
+                # Record as pending
+                add_pv_verification(
+                    bot_id, user.id, verify_type, url,
+                    "pending", result.get('message', 'Awaiting review'), verify_id
+                )
         else:
             # Failed - refund
             from database_pg import add_pv_balance
