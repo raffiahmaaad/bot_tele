@@ -153,6 +153,13 @@ class ApiClient {
     });
   }
 
+  async testPakasir(slug: string, apiKey: string) {
+    return this.request<{ valid: boolean; project_name?: string; error?: string; message?: string }>('/bots/test-pakasir', {
+      method: 'POST',
+      body: JSON.stringify({ slug, api_key: apiKey }),
+    });
+  }
+
   // ==================== PRODUCTS ====================
 
   async getProducts(botId: number) {

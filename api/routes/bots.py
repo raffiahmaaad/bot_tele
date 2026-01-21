@@ -51,6 +51,40 @@ def list_bots():
     })
 
 
+@bots_bp.route('/test-pakasir', methods=['POST'])
+@jwt_required()
+def test_pakasir_connection():
+    """Test Pakasir API connection."""
+    data = request.get_json()
+    slug = data.get('slug', '').strip()
+    api_key = data.get('api_key', '').strip()
+    
+    if not slug or not api_key:
+        return jsonify({'valid': False, 'error': 'Slug dan API Key wajib diisi'}), 400
+    
+    try:
+        # Test Pakasir API by getting project info
+        url = f"https://pakasir.com/api/v1/projects/{slug}"
+        headers = {'Authorization': f'Bearer {api_key}'}
+        response = http_requests.get(url, headers=headers, timeout=10)
+        
+        if response.status_code == 200:
+            project_data = response.json()
+            return jsonify({
+                'valid': True,
+                'project_name': project_data.get('name', slug),
+                'message': 'Koneksi berhasil!'
+            })
+        elif response.status_code == 401:
+            return jsonify({'valid': False, 'error': 'API Key tidak valid'})
+        elif response.status_code == 404:
+            return jsonify({'valid': False, 'error': 'Project slug tidak ditemukan'})
+        else:
+            return jsonify({'valid': False, 'error': f'Error: {response.status_code}'})
+    except Exception as e:
+        return jsonify({'valid': False, 'error': f'Koneksi gagal: {str(e)}'})
+
+
 @bots_bp.route('', methods=['POST'])
 @jwt_required()
 def create_new_bot():

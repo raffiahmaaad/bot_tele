@@ -43,6 +43,12 @@ export default function BotsPage() {
   const [pakasirApiKey, setPakasirApiKey] = useState("");
   const [isAdding, setIsAdding] = useState(false);
   const [error, setError] = useState("");
+  const [pakasirTestResult, setPakasirTestResult] = useState<{
+    valid?: boolean;
+    message?: string;
+    error?: string;
+  } | null>(null);
+  const [isTesting, setIsTesting] = useState(false);
 
   useEffect(() => {
     fetchBots();
@@ -87,6 +93,30 @@ export default function BotsPage() {
     setPakasirApiKey("");
     setError("");
     setIsAdding(false);
+    setPakasirTestResult(null);
+    setIsTesting(false);
+  };
+
+  const testPakasir = async () => {
+    if (!pakasirSlug || !pakasirApiKey) {
+      setPakasirTestResult({
+        valid: false,
+        error: "Isi slug dan API key terlebih dahulu",
+      });
+      return;
+    }
+    setIsTesting(true);
+    setPakasirTestResult(null);
+    const result = await api.testPakasir(pakasirSlug, pakasirApiKey);
+    if (result.data) {
+      setPakasirTestResult(result.data);
+    } else {
+      setPakasirTestResult({
+        valid: false,
+        error: result.error || "Gagal test koneksi",
+      });
+    }
+    setIsTesting(false);
   };
 
   const getBotTypeInfo = (type: string) => {
@@ -390,6 +420,32 @@ export default function BotsPage() {
                       onChange={(e) => setPakasirApiKey(e.target.value)}
                     />
                   </div>
+
+                  {/* Test Connection Button */}
+                  <button
+                    type="button"
+                    onClick={testPakasir}
+                    disabled={isTesting || !pakasirSlug || !pakasirApiKey}
+                    className="w-full px-3 py-2 text-sm rounded-lg bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/50 text-blue-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isTesting ? "⏳ Testing..." : "🔌 Test Koneksi Pakasir"}
+                  </button>
+
+                  {/* Test Result */}
+                  {pakasirTestResult && (
+                    <div
+                      className={`p-2 rounded-lg text-sm ${
+                        pakasirTestResult.valid
+                          ? "bg-green-500/10 border border-green-500/30 text-green-400"
+                          : "bg-red-500/10 border border-red-500/30 text-red-400"
+                      }`}
+                    >
+                      {pakasirTestResult.valid
+                        ? `✅ ${pakasirTestResult.message}`
+                        : `❌ ${pakasirTestResult.error}`}
+                    </div>
+                  )}
+
                   <p className="text-xs text-[var(--text-muted)]">
                     Konfigurasi ini bisa diatur nanti di halaman Setting bot
                   </p>
