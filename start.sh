@@ -1,30 +1,45 @@
 #!/bin/bash
 # ==============================================
-# Start Backend & Frontend (Production)
+# BotStore Backend - YP Cloud VPS Startup Script
+# For Pterodactyl Docker (Python 3.12)
 # ==============================================
 
-# Kill existing processes
-pkill -f "gunicorn" 2>/dev/null
-pkill -f "next-server" 2>/dev/null
+echo "=========================================="
+echo "🚀 BotStore Backend API"
+echo "=========================================="
 
-# Start Backend API
-echo "🚀 Starting Backend API on port 5001..."
+# Create logs directory if not exists
+mkdir -p logs
+
+# Add local bin to PATH for installed scripts
+export PATH=$PATH:/home/container/.local/bin
+
+# Get port from Pterodactyl (default to 2048)
+PORT=${SERVER_PORT:-2048}
+
+# Step 1: Install Python dependencies
+echo ""
+echo "📦 Installing Python dependencies..."
+pip install -r requirements.txt --quiet --no-warn-script-location
+if [ $? -eq 0 ]; then
+    echo "✅ Python dependencies installed"
+else
+    echo "❌ Failed to install dependencies"
+    exit 1
+fi
+
+# Step 2: Run database migrations (optional)
+echo ""
+echo "🗄️ Checking database schema..."
+if [ -f "scripts/update_schema.py" ]; then
+    cd scripts
+    python update_schema.py 2>/dev/null || echo "⚠️ Schema update skipped"
+    cd ..
+fi
+
+# Step 3: Start the API server with Gunicorn (Production)
+echo ""
+echo "🌐 Starting Backend API on port $PORT..."
+echo "=========================================="
 cd api
-nohup python app.py > ../logs/backend.log 2>&1 &
-cd ..
-
-# Wait for backend to start
-sleep 3
-
-# Start Frontend
-echo "🌐 Starting Frontend on port 3000..."
-cd web
-nohup npm start > ../logs/frontend.log 2>&1 &
-cd ..
-
-echo ""
-echo "✅ Application started!"
-echo "   Backend:  http://localhost:5001"
-echo "   Frontend: http://localhost:3000"
-echo ""
-echo "📋 Logs: ./logs/backend.log & ./logs/frontend.log"
+gunicorn "app:create_app()" --bind 0.0.0.0:$PORT --workers 2 --threads 4 --timeout 120 --access-logfile - --error-logfile -
