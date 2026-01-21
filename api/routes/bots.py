@@ -63,26 +63,33 @@ def test_pakasir_connection():
         return jsonify({'valid': False, 'error': 'Slug dan API Key wajib diisi'}), 400
     
     try:
-        # Test Pakasir API by getting project info
-        url = f"https://app.pakasir.com/api/projects/{slug}"
-        headers = {'Authorization': f'Bearer {api_key}'}
+        # Try balance endpoint which should work with valid API key
+        url = f"https://app.pakasir.com/api/balance"
+        headers = {
+            'Authorization': f'Bearer {api_key}',
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+        }
         response = http_requests.get(url, headers=headers, timeout=10)
         
         if response.status_code == 200:
-            project_data = response.json()
             return jsonify({
                 'valid': True,
-                'project_name': project_data.get('name', slug),
-                'message': 'Koneksi berhasil!'
+                'project_name': slug,
+                'message': f'Koneksi berhasil! Project: {slug}'
             })
         elif response.status_code == 401:
-            return jsonify({'valid': False, 'error': 'API Key tidak valid'})
-        elif response.status_code == 404:
-            return jsonify({'valid': False, 'error': 'Project slug tidak ditemukan'})
+            return jsonify({'valid': False, 'error': 'API Key tidak valid atau expired'})
+        elif response.status_code == 403:
+            return jsonify({'valid': False, 'error': 'Akses ditolak, cek API Key'})
         else:
-            return jsonify({'valid': False, 'error': f'Error: {response.status_code}'})
+            return jsonify({'valid': False, 'error': f'HTTP Error: {response.status_code}'})
+    except http_requests.exceptions.Timeout:
+        return jsonify({'valid': False, 'error': 'Koneksi timeout, coba lagi'})
+    except http_requests.exceptions.ConnectionError:
+        return jsonify({'valid': False, 'error': 'Tidak dapat terhubung ke Pakasir'})
     except Exception as e:
-        return jsonify({'valid': False, 'error': f'Koneksi gagal: {str(e)}'})
+        return jsonify({'valid': False, 'error': f'Error: {str(e)}'})
 
 
 @bots_bp.route('', methods=['POST'])
@@ -134,7 +141,9 @@ def create_new_bot():
             }
         }), 201
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': f'Gagal membuat bot: {str(e)}'}), 500
 
 
 @bots_bp.route('/<int:bot_id>', methods=['GET'])
