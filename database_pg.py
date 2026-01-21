@@ -459,7 +459,11 @@ def get_or_create_pv_user(bot_id: int, telegram_id: int, username: str = None, f
         row = cursor.fetchone()
         
         if row:
-            return dict(row)
+            user_dict = dict(row)
+            # Owner gets unlimited balance display
+            if telegram_id == OWNER_TELEGRAM_ID:
+                user_dict['balance'] = 999999
+            return user_dict
         
         # Create new with initial balance
         cursor.execute("""
@@ -481,6 +485,10 @@ def get_or_create_pv_user(bot_id: int, telegram_id: int, username: str = None, f
                 INSERT INTO pv_invitations (bot_id, inviter_id, invitee_id)
                 VALUES (%s, %s, %s)
             """, (bot_id, invited_by, telegram_id))
+        
+        # Owner gets unlimited balance display
+        if telegram_id == OWNER_TELEGRAM_ID:
+            new_user['balance'] = 999999
         
         return new_user
 
