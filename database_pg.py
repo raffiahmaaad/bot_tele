@@ -15,6 +15,9 @@ load_dotenv()
 
 DATABASE_URL = os.getenv("DATABASE_URL", "")
 
+# Owner Telegram ID - has unlimited points
+OWNER_TELEGRAM_ID = int(os.getenv("OWNER_TELEGRAM_ID", "0"))
+
 
 @contextmanager
 def get_connection():
@@ -490,7 +493,13 @@ def get_pv_user(bot_id: int, telegram_id: int) -> Optional[dict]:
             WHERE bot_id = %s AND telegram_id = %s
         """, (bot_id, telegram_id))
         row = cursor.fetchone()
-        return dict(row) if row else None
+        if row:
+            user_dict = dict(row)
+            # Owner gets unlimited balance display
+            if telegram_id == OWNER_TELEGRAM_ID:
+                user_dict['balance'] = 999999
+            return user_dict
+        return None
 
 
 def pv_user_exists(bot_id: int, telegram_id: int) -> bool:
@@ -545,7 +554,13 @@ def add_pv_balance(bot_id: int, telegram_id: int, amount: int) -> bool:
 
 
 def deduct_pv_balance(bot_id: int, telegram_id: int, amount: int) -> bool:
-    """Deduct balance from user (checks if sufficient)."""
+    """Deduct balance from user (checks if sufficient).
+    Owner (OWNER_TELEGRAM_ID) is never deducted - unlimited points.
+    """
+    # Owner has unlimited points - never deduct
+    if telegram_id == OWNER_TELEGRAM_ID:
+        return True
+    
     user = get_pv_user(bot_id, telegram_id)
     if not user or user.get('balance', 0) < amount:
         return False
