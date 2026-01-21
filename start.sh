@@ -47,4 +47,16 @@ echo ""
 echo "Starting Backend API on port $PORT..."
 echo "=========================================="
 cd "$ROOT_DIR/api"
-gunicorn "app:create_app()" --bind 0.0.0.0:$PORT --workers 2 --threads 4 --timeout 120 --access-logfile - --error-logfile -
+
+# Ensure PYTHONPATH includes current directory
+export PYTHONPATH="$ROOT_DIR/api:$PYTHONPATH"
+
+# Check if app.py exists
+if [ -f "app.py" ]; then
+    echo "Found app.py in $(pwd)"
+    gunicorn "app:create_app()" --bind 0.0.0.0:$PORT --workers 2 --threads 4 --timeout 120 --access-logfile - --error-logfile -
+else
+    echo "ERROR: app.py not found in $(pwd)"
+    ls -la
+    exit 1
+fi

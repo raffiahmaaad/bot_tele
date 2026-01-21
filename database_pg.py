@@ -802,17 +802,38 @@ def get_active_proxy_for_user(user_id: int) -> Optional[str]:
 
 def get_owner_proxy() -> Optional[str]:
     """
-    Get active proxy for the owner (OWNER_TELEGRAM_ID).
-    Looks up the owner's user_id and returns their active proxy.
+    Get active proxy for the owner.
+    Uses OWNER_USER_ID environment variable to get the dashboard user's proxy.
+    Falls back to checking user_proxies table for the first user if not set.
     """
+    # Try to get owner user_id from environment
+    owner_user_id = os.getenv("OWNER_USER_ID")
+    
+    if owner_user_id:
+        try:
+            return get_active_proxy_for_user(int(owner_user_id))
+        except (ValueError, TypeError):
+            pass
+    
+    # Fallback: get first user with active proxy
     with get_cursor() as cursor:
-        # Get owner's user_id from users table
         cursor.execute("""
-            SELECT id FROM users WHERE telegram_id = %s
-        """, (OWNER_TELEGRAM_ID,))
+            SELECT user_id FROM user_proxies WHERE is_active = true LIMIT 1
+        """)
         row = cursor.fetchone()
         
         if row:
-            return get_active_proxy_for_user(row['id'])
+            return get_active_proxy_for_user(row['user_id'])
+        
+        # Fallback: check sheerid_settings
+        cursor.execute("""
+            SELECT user_id FROM sheerid_settings 
+            WHERE proxy_enabled = true AND proxy_host IS NOT NULL 
+            LIMIT 1
+        """)
+        row = cursor.fetchone()
+        
+        if row:
+            return get_active_proxy_for_user(row['user_id'])
         
         return None

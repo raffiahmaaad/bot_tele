@@ -233,12 +233,27 @@ async def sheerid_receive_url(update: Update, context: ContextTypes.DEFAULT_TYPE
         from database_pg import get_owner_proxy
         proxy = get_owner_proxy()
         
+        # Determine proxy status message
         if proxy:
+            proxy_status = "✅ Menggunakan Proxy"
             logger.info(f"Using proxy from dashboard for verification")
+        else:
+            proxy_status = "⚠️ Tanpa Proxy"
+            logger.info("No proxy configured, verification will use direct connection")
         
         # Run verification with proxy
         verifier = SheerIDVerifier(url, verify_type, proxy=proxy)
         result = verifier.verify()
+        
+        # Update processing message with proxy info
+        await processing_msg.edit_text(
+            f"⏳ *Memproses Verifikasi...*\n\n"
+            f"Tipe: {VERIFY_TYPES[verify_type]['name']}\n"
+            f"ID: `{verify_id[:8]}...`\n"
+            f"🌐 {proxy_status}\n\n"
+            f"Mohon tunggu, proses ini bisa memakan waktu 30-60 detik...",
+            parse_mode="Markdown"
+        )
         
         if result.get('success'):
             # Success
