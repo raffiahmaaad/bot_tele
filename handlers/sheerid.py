@@ -181,6 +181,9 @@ async def sheerid_type_selected(update: Update, context: ContextTypes.DEFAULT_TY
 
 async def sheerid_receive_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle URL input from user."""
+    import time
+    from datetime import datetime
+    
     user = update.effective_user
     bot_id = context.bot_data.get('bot_id')
     url = update.message.text.strip()
@@ -219,41 +222,71 @@ async def sheerid_receive_url(update: Update, context: ContextTypes.DEFAULT_TYPE
         )
         return ConversationHandler.END
     
+    # Record start time
+    start_time = time.time()
+    submit_time = datetime.now()
+    submit_time_str = submit_time.strftime("%H:%M:%S %d/%m/%Y")
+    
     # Send processing message
     processing_msg = await update.message.reply_text(
         f"⏳ *Memproses Verifikasi...*\n\n"
         f"Tipe: {VERIFY_TYPES[verify_type]['name']}\n"
-        f"ID: `{verify_id[:8]}...`\n\n"
+        f"ID: `{verify_id[:8]}...`\n"
+        f"🕐 Mulai: {submit_time_str}\n\n"
         f"Mohon tunggu, proses ini bisa memakan waktu 30-60 detik...",
         parse_mode="Markdown"
     )
     
     try:
         # Get owner's proxy from dashboard settings
-        from database_pg import get_owner_proxy
+        from database_pg import get_owner_proxy, OWNER_TELEGRAM_ID
+        import os
+        
+        owner_user_id = os.getenv("OWNER_USER_ID", "Not Set")
         proxy = get_owner_proxy()
         
-        # Determine proxy status message
+        # Detailed proxy logging
         if proxy:
-            proxy_status = "✅ Menggunakan Proxy"
-            logger.info(f"Using proxy from dashboard for verification")
+            # Mask password in proxy URL for display
+            proxy_display = proxy
+            if "@" in proxy:
+                parts = proxy.split("@")
+                auth_parts = parts[0].replace("http://", "").split(":")
+                if len(auth_parts) >= 2:
+                    proxy_display = f"http://{auth_parts[0]}:****@{parts[1]}"
+            
+            proxy_status = f"✅ Proxy Aktif"
+            proxy_info = f"🌐 {proxy_display}"
+            logger.info(f"[VERIFY] User {user.id} - Using proxy: {proxy_display}")
+            logger.info(f"[VERIFY] OWNER_USER_ID={owner_user_id}, OWNER_TELEGRAM_ID={OWNER_TELEGRAM_ID}")
         else:
             proxy_status = "⚠️ Tanpa Proxy"
-            logger.info("No proxy configured, verification will use direct connection")
-        
-        # Run verification with proxy
-        verifier = SheerIDVerifier(url, verify_type, proxy=proxy)
-        result = verifier.verify()
+            proxy_info = "🌐 Direct Connection (No Proxy)"
+            logger.warning(f"[VERIFY] User {user.id} - NO PROXY CONFIGURED!")
+            logger.warning(f"[VERIFY] OWNER_USER_ID={owner_user_id} - Check if proxy is activated in dashboard")
         
         # Update processing message with proxy info
         await processing_msg.edit_text(
             f"⏳ *Memproses Verifikasi...*\n\n"
             f"Tipe: {VERIFY_TYPES[verify_type]['name']}\n"
             f"ID: `{verify_id[:8]}...`\n"
-            f"🌐 {proxy_status}\n\n"
-            f"Mohon tunggu, proses ini bisa memakan waktu 30-60 detik...",
+            f"🕐 Mulai: {submit_time_str}\n"
+            f"{proxy_status}\n\n"
+            f"Mohon tunggu...",
             parse_mode="Markdown"
         )
+        
+        # Run verification with proxy
+        logger.info(f"[VERIFY] Starting verification for {verify_type} - ID: {verify_id[:8]}...")
+        verifier = SheerIDVerifier(url, verify_type, proxy=proxy)
+        result = verifier.verify()
+        
+        # Calculate duration
+        end_time = time.time()
+        duration = round(end_time - start_time, 2)
+        duration_str = f"{duration}s"
+        
+        logger.info(f"[VERIFY] Completed in {duration_str} - Success: {result.get('success')} - Final Step: {result.get('final_step')}")
         
         if result.get('success'):
             student_name = result.get('student_name', 'N/A')
@@ -266,8 +299,11 @@ async def sheerid_receive_url(update: Update, context: ContextTypes.DEFAULT_TYPE
                     f"✅ *Verifikasi Berhasil!*\n\n"
                     f"Tipe: {VERIFY_TYPES[verify_type]['name']}\n"
                     f"Nama: {student_name}\n"
-                    f"Biaya: {cost} poin\n"
-                    f"🌐 {proxy_status}\n\n"
+                    f"Biaya: {cost} poin\n\n"
+                    f"📊 *Info Proses:*\n"
+                    f"🕐 Submit: {submit_time_str}\n"
+                    f"⏱️ Durasi: {duration_str}\n"
+                    f"{proxy_status}\n\n"
                     f"🎉 Silakan kembali ke layanan untuk klaim benefit!",
                     parse_mode="Markdown",
                     reply_markup=InlineKeyboardMarkup([
@@ -286,12 +322,14 @@ async def sheerid_receive_url(update: Update, context: ContextTypes.DEFAULT_TYPE
                     f"⏳ *Verifikasi Dalam Review*\n\n"
                     f"Tipe: {VERIFY_TYPES[verify_type]['name']}\n"
                     f"Nama: {student_name}\n"
-                    f"Biaya: {cost} poin\n"
-                    f"🌐 {proxy_status}\n\n"
+                    f"Biaya: {cost} poin\n\n"
                     f"📋 Status: *PENDING* (Dalam Review)\n"
                     f"⏰ Estimasi: 24-48 jam\n\n"
-                    f"Dokumen berhasil disubmit, menunggu verifikasi manual dari SheerID.\n"
-                    f"Cek status secara berkala di layanan terkait.",
+                    f"📊 *Info Proses:*\n"
+                    f"🕐 Submit: {submit_time_str}\n"
+                    f"⏱️ Durasi: {duration_str}\n"
+                    f"{proxy_status}\n\n"
+                    f"Dokumen berhasil disubmit, menunggu verifikasi manual.",
                     parse_mode="Markdown",
                     reply_markup=InlineKeyboardMarkup([
                         [InlineKeyboardButton("🔙 Menu SheerID", callback_data="menu_sheerid")]
@@ -309,9 +347,15 @@ async def sheerid_receive_url(update: Update, context: ContextTypes.DEFAULT_TYPE
             add_pv_balance(bot_id, user.id, cost)
             
             error = result.get('error', 'Unknown error')
+            logger.error(f"[VERIFY] FAILED - Error: {error} - Duration: {duration_str}")
+            
             await processing_msg.edit_text(
                 f"❌ *Verifikasi Gagal*\n\n"
                 f"Error: {error}\n\n"
+                f"📊 *Info Proses:*\n"
+                f"🕐 Submit: {submit_time_str}\n"
+                f"⏱️ Durasi: {duration_str}\n"
+                f"{proxy_status}\n\n"
                 f"💰 Saldo {cost} poin dikembalikan.",
                 parse_mode="Markdown",
                 reply_markup=InlineKeyboardMarkup([
