@@ -64,7 +64,7 @@ def test_pakasir_connection():
     
     try:
         # Test Pakasir API by getting project info
-        url = f"https://pakasir.com/api/v1/projects/{slug}"
+        url = f"https://app.pakasir.com/api/projects/{slug}"
         headers = {'Authorization': f'Bearer {api_key}'}
         response = http_requests.get(url, headers=headers, timeout=10)
         
