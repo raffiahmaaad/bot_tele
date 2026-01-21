@@ -5,6 +5,7 @@
 - Python 3.10+
 - Node.js 18+
 - Neon PostgreSQL database
+ssss
 
 ## Quick Start
 
