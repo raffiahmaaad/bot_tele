@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useSearchParams } from "next/navigation";
 import api from "@/lib/api";
 
 interface Command {
@@ -49,13 +48,8 @@ const DEFAULT_STORE_COMMANDS = [
 ];
 
 export default function StoreCommandsPage() {
-  const searchParams = useSearchParams();
-  const botId = searchParams.get("bot");
-
   const [bots, setBots] = useState<Bot[]>([]);
-  const [selectedBot, setSelectedBot] = useState<number | null>(
-    botId ? Number(botId) : null,
-  );
+  const [selectedBot, setSelectedBot] = useState<number | null>(null);
   const [commands, setCommands] = useState<Command[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);

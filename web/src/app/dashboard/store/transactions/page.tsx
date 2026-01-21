@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useSearchParams } from "next/navigation";
 import api from "@/lib/api";
 
 interface Transaction {
@@ -22,13 +21,8 @@ interface Bot {
 }
 
 export default function StoreTransactionsPage() {
-  const searchParams = useSearchParams();
-  const botId = searchParams.get("bot");
-
   const [bots, setBots] = useState<Bot[]>([]);
-  const [selectedBot, setSelectedBot] = useState<number | null>(
-    botId ? Number(botId) : null,
-  );
+  const [selectedBot, setSelectedBot] = useState<number | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [filter, setFilter] = useState("all");
