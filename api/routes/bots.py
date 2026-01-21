@@ -41,6 +41,7 @@ def list_bots():
             'id': bot['id'],
             'bot_username': bot['bot_username'],
             'bot_name': bot['bot_name'],
+            'bot_type': bot.get('bot_type', 'store'),
             'is_active': bot['is_active'],
             'products_count': bot['products_count'],
             'users_count': bot['users_count'],
@@ -58,9 +59,15 @@ def create_new_bot():
     data = request.get_json()
     
     telegram_token = data.get('telegram_token', '').strip()
+    bot_type = data.get('bot_type', 'store')
+    pakasir_slug = data.get('pakasir_slug', '').strip() or None
+    pakasir_api_key = data.get('pakasir_api_key', '').strip() or None
     
     if not telegram_token:
         return jsonify({'error': 'Bot token wajib diisi'}), 400
+    
+    if bot_type not in ['store', 'sheerid', 'custom']:
+        return jsonify({'error': 'Tipe bot tidak valid'}), 400
     
     # Verify token with Telegram
     bot_info = verify_bot_token(telegram_token)
@@ -72,7 +79,15 @@ def create_new_bot():
     bot_name = bot_info.get('first_name', 'Unnamed Bot')
     
     try:
-        bot = create_bot(user_id, telegram_token, bot_username, bot_name)
+        bot = create_bot(
+            user_id, 
+            telegram_token, 
+            bot_username, 
+            bot_name,
+            bot_type=bot_type,
+            pakasir_slug=pakasir_slug,
+            pakasir_api_key=pakasir_api_key
+        )
         
         return jsonify({
             'message': 'Bot berhasil ditambahkan',
@@ -80,6 +95,7 @@ def create_new_bot():
                 'id': bot['id'],
                 'bot_username': bot['bot_username'],
                 'bot_name': bot['bot_name'],
+                'bot_type': bot['bot_type'],
                 'is_active': bot['is_active'],
             }
         }), 201
@@ -104,7 +120,9 @@ def get_single_bot(bot_id: int):
             'id': bot['id'],
             'bot_username': bot['bot_username'],
             'bot_name': bot['bot_name'],
-            'pakasir_slug': bot['pakasir_slug'],
+            'bot_type': bot.get('bot_type', 'store'),
+            'pakasir_slug': bot.get('pakasir_slug'),
+            'pakasir_api_key': '••••••••' if bot.get('pakasir_api_key') else None,
             'is_active': bot['is_active'],
             'created_at': bot['created_at'].isoformat() if bot['created_at'] else None,
         },
@@ -127,6 +145,7 @@ def update_single_bot(bot_id: int):
     updated_bot = update_bot(
         bot_id,
         bot_name=data.get('bot_name'),
+        bot_type=data.get('bot_type'),
         pakasir_slug=data.get('pakasir_slug'),
         pakasir_api_key=data.get('pakasir_api_key'),
         is_active=data.get('is_active'),
@@ -138,6 +157,7 @@ def update_single_bot(bot_id: int):
             'id': updated_bot['id'],
             'bot_username': updated_bot['bot_username'],
             'bot_name': updated_bot['bot_name'],
+            'bot_type': updated_bot.get('bot_type', 'store'),
             'is_active': updated_bot['is_active'],
         }
     })

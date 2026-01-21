@@ -124,10 +124,15 @@ class ApiClient {
     return this.request<{ bots: any[] }>('/bots');
   }
 
-  async createBot(telegramToken: string) {
+  async createBot(telegramToken: string, botType: string = 'store', pakasirSlug?: string, pakasirApiKey?: string) {
     return this.request<{ bot: any }>('/bots', {
       method: 'POST',
-      body: JSON.stringify({ telegram_token: telegramToken }),
+      body: JSON.stringify({ 
+        telegram_token: telegramToken,
+        bot_type: botType,
+        pakasir_slug: pakasirSlug,
+        pakasir_api_key: pakasirApiKey
+      }),
     });
   }
 

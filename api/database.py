@@ -196,14 +196,15 @@ def get_user_by_id(user_id: int) -> Optional[dict]:
 
 # ==================== BOT OPERATIONS ====================
 
-def create_bot(user_id: int, telegram_token: str, bot_username: str = None, bot_name: str = None) -> Optional[dict]:
+def create_bot(user_id: int, telegram_token: str, bot_username: str = None, bot_name: str = None, 
+               bot_type: str = 'store', pakasir_slug: str = None, pakasir_api_key: str = None) -> Optional[dict]:
     """Create a new bot."""
     with get_cursor() as cursor:
         cursor.execute("""
-            INSERT INTO bots (user_id, telegram_token, bot_username, bot_name)
-            VALUES (%s, %s, %s, %s)
-            RETURNING id, user_id, telegram_token, bot_username, bot_name, is_active, created_at
-        """, (user_id, telegram_token, bot_username, bot_name))
+            INSERT INTO bots (user_id, telegram_token, bot_username, bot_name, bot_type, pakasir_slug, pakasir_api_key)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            RETURNING id, user_id, telegram_token, bot_username, bot_name, bot_type, is_active, created_at
+        """, (user_id, telegram_token, bot_username, bot_name, bot_type, pakasir_slug, pakasir_api_key))
         return dict(cursor.fetchone())
 
 
@@ -237,7 +238,7 @@ def get_bot_by_id(bot_id: int, user_id: int = None) -> Optional[dict]:
 
 def update_bot(bot_id: int, **kwargs) -> Optional[dict]:
     """Update a bot."""
-    allowed_fields = ['bot_name', 'pakasir_slug', 'pakasir_api_key', 'is_active']
+    allowed_fields = ['bot_name', 'bot_type', 'pakasir_slug', 'pakasir_api_key', 'is_active']
     updates = {k: v for k, v in kwargs.items() if k in allowed_fields and v is not None}
     
     if not updates:
