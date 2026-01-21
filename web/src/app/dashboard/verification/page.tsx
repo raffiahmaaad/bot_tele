@@ -47,6 +47,7 @@ export default function VerificationPage() {
   const [proxyCheckResult, setProxyCheckResult] =
     useState<ProxyCheckResult | null>(null);
   const [isCheckingProxy, setIsCheckingProxy] = useState(false);
+  const [settingsAutoSaved, setSettingsAutoSaved] = useState(false);
 
   // Detail modal
   const [selectedVerification, setSelectedVerification] =
@@ -159,6 +160,7 @@ export default function VerificationPage() {
     if (!proxyHost || !proxyPort) return;
     setIsCheckingProxy(true);
     setProxyCheckResult(null);
+    setSettingsAutoSaved(false);
     const result = await api.proxyCheck(
       proxyHost,
       parseInt(proxyPort),
@@ -167,6 +169,20 @@ export default function VerificationPage() {
     );
     if (result.data) {
       setProxyCheckResult(result.data);
+      // Auto-save settings when proxy test is successful
+      if (result.data.valid) {
+        const saveResult = await api.saveSheerIDSettings({
+          proxy_enabled: proxyEnabled,
+          proxy_host: proxyHost || undefined,
+          proxy_port: proxyPort ? parseInt(proxyPort) : undefined,
+          proxy_username: proxyUsername || undefined,
+          proxy_password: proxyPassword || undefined,
+        });
+        if (saveResult.data?.settings) {
+          setSettings(saveResult.data.settings);
+          setSettingsAutoSaved(true);
+        }
+      }
     }
     setIsCheckingProxy(false);
   };
@@ -450,6 +466,11 @@ export default function VerificationPage() {
                           <div className="flex items-center gap-2 text-green-400 font-medium mb-2">
                             <span>✅</span>
                             <span>Proxy is working!</span>
+                            {settingsAutoSaved && (
+                              <span className="text-xs bg-green-500/20 px-2 py-0.5 rounded-full">
+                                💾 Auto-saved
+                              </span>
+                            )}
                           </div>
                           <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
                             <div>
