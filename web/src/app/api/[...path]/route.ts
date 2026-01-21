@@ -22,7 +22,7 @@ async function proxyRequest(request: NextRequest, path: string) {
 
   // Forward headers (exclude host and other problematic headers)
   const headers: Record<string, string> = {};
-  request.headers.forEach((value, key) => {
+  request.headers.forEach((value: string, key: string) => {
     const lowerKey = key.toLowerCase();
     if (!['host', 'connection', 'transfer-encoding', 'content-length'].includes(lowerKey)) {
       headers[key] = value;
