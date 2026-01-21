@@ -24,8 +24,8 @@ env/
 .DS_Store
 Thumbs.db
 
-# Products folder (digital products storage)
-products/
+# Products folder (digital products storage - only at root level)
+/products/
 
 # Logs
 *.log

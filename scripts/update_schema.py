@@ -210,6 +210,25 @@ def update_schema():
             ON user_proxies(user_id)
         """)
         
+        # ==================== BOT COMMANDS TABLE ====================
+        print("   Creating bot_commands table...")
+        
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS bot_commands (
+                id SERIAL PRIMARY KEY,
+                bot_id INTEGER REFERENCES bots(id) ON DELETE CASCADE,
+                command_name VARCHAR(50) NOT NULL,
+                response_text TEXT,
+                is_enabled BOOLEAN DEFAULT true,
+                created_at TIMESTAMP DEFAULT NOW(),
+                UNIQUE(bot_id, command_name)
+            )
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_bot_commands_bot_id 
+            ON bot_commands(bot_id)
+        """)
+        
         conn.commit()
         print("✅ Schema updated successfully!")
         return True
