@@ -38,13 +38,21 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Check if user is owner (admin)
     is_admin = is_owner(user.id)
     
-    # Create welcome message
-    welcome_text = (
-        f"👋 *Selamat datang, {user.first_name}!*\n\n"
-        f"🛒 *Digital Store Bot*\n"
-        f"Toko produk digital dengan pembayaran QRIS\n\n"
-        f"Pilih menu di bawah untuk memulai:"
-    )
+    # Check for custom command response from dashboard
+    from database_pg import get_bot_command
+    custom_cmd = get_bot_command(bot_id, 'start')
+    
+    if custom_cmd and custom_cmd.get('response_text'):
+        # Use custom response from dashboard
+        welcome_text = custom_cmd['response_text']
+    else:
+        # Default welcome message
+        welcome_text = (
+            f"👋 *Selamat datang, {user.first_name}!*\n\n"
+            f"🛒 *Digital Store Bot*\n"
+            f"Toko produk digital dengan pembayaran QRIS\n\n"
+            f"Pilih menu di bawah untuk memulai:"
+        )
     
     # Use admin keyboard if user is owner
     keyboard = create_admin_menu_keyboard() if is_admin else create_menu_keyboard()
@@ -62,14 +70,22 @@ async def back_to_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     
     user = update.effective_user
+    bot_id = context.bot_data.get('bot_id')
     is_admin = is_owner(user.id)
     
-    welcome_text = (
-        f"👋 *Selamat datang, {user.first_name}!*\n\n"
-        f"🛒 *Digital Store Bot*\n"
-        f"Toko produk digital dengan pembayaran QRIS\n\n"
-        f"Pilih menu di bawah untuk memulai:"
-    )
+    # Check for custom command response from dashboard
+    from database_pg import get_bot_command
+    custom_cmd = get_bot_command(bot_id, 'menu') if bot_id else None
+    
+    if custom_cmd and custom_cmd.get('response_text'):
+        welcome_text = custom_cmd['response_text']
+    else:
+        welcome_text = (
+            f"👋 *Selamat datang, {user.first_name}!*\n\n"
+            f"🛒 *Digital Store Bot*\n"
+            f"Toko produk digital dengan pembayaran QRIS\n\n"
+            f"Pilih menu di bawah untuk memulai:"
+        )
     
     keyboard = create_admin_menu_keyboard() if is_admin else create_menu_keyboard()
     

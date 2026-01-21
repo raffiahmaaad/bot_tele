@@ -699,3 +699,28 @@ def get_all_pv_user_ids(bot_id: int) -> list[int]:
         """, (bot_id,))
         return [row['telegram_id'] for row in cursor.fetchall()]
 
+
+# ==================== BOT COMMANDS OPERATIONS ====================
+
+def get_bot_command(bot_id: int, command_name: str) -> Optional[dict]:
+    """Get a specific custom command for a bot."""
+    with get_cursor() as cursor:
+        cursor.execute("""
+            SELECT id, bot_id, command_name, response_text, is_enabled, created_at
+            FROM bot_commands
+            WHERE bot_id = %s AND command_name = %s AND is_enabled = true
+        """, (bot_id, command_name))
+        row = cursor.fetchone()
+        return dict(row) if row else None
+
+
+def get_all_bot_commands(bot_id: int) -> list[dict]:
+    """Get all enabled commands for a bot."""
+    with get_cursor() as cursor:
+        cursor.execute("""
+            SELECT id, bot_id, command_name, response_text, is_enabled, created_at
+            FROM bot_commands
+            WHERE bot_id = %s AND is_enabled = true
+            ORDER BY command_name
+        """, (bot_id,))
+        return [dict(row) for row in cursor.fetchall()]
