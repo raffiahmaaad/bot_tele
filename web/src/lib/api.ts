@@ -240,6 +240,50 @@ class ApiClient {
   async checkVerificationStatus(verificationId: number) {
     return this.request<VerificationStatusResult>(`/sheerid/verifications/${verificationId}/status`);
   }
+
+  // ==================== MULTI-PROXY MANAGEMENT ====================
+
+  async getProxies() {
+    return this.request<{ proxies: UserProxy[] }>('/sheerid/proxies');
+  }
+
+  async addProxy(data: { name: string; host: string; port: number; username?: string; password?: string }) {
+    return this.request<{ message: string; proxy: UserProxy }>('/sheerid/proxies', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateProxy(proxyId: number, data: Partial<{ name: string; host: string; port: number; username: string; password: string }>) {
+    return this.request<{ message: string; proxy: UserProxy }>(`/sheerid/proxies/${proxyId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteProxy(proxyId: number) {
+    return this.request<{ message: string }>(`/sheerid/proxies/${proxyId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async activateProxy(proxyId: number) {
+    return this.request<{ message: string; proxy: UserProxy }>(`/sheerid/proxies/${proxyId}/activate`, {
+      method: 'POST',
+    });
+  }
+
+  async deactivateProxy(proxyId: number) {
+    return this.request<{ message: string }>(`/sheerid/proxies/${proxyId}/deactivate`, {
+      method: 'POST',
+    });
+  }
+
+  async testSavedProxy(proxyId: number) {
+    return this.request<ProxyCheckResult>(`/sheerid/proxies/${proxyId}/test`, {
+      method: 'POST',
+    });
+  }
 }
 
 // Verification Status Result (real-time from SheerID)
@@ -330,6 +374,20 @@ export interface SheerIDSettings {
   proxy_username?: string;
   proxy_password?: string;
   default_points_cost: number;
+}
+
+// User Proxy (multi-proxy storage)
+export interface UserProxy {
+  id: number;
+  name: string;
+  host: string;
+  port: number;
+  username?: string;
+  is_active: boolean;
+  last_tested_at?: string;
+  last_test_success?: boolean;
+  created_at: string;
+  updated_at: string;
 }
 
 // Singleton instance

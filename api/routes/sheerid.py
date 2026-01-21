@@ -391,7 +391,12 @@ def get_settings():
     if not user_id:
         return jsonify({"error": "Invalid user"}), 401
     
+    print(f"[DEBUG] get_settings called for user_id: {user_id}")
+    
     settings = get_user_settings(user_id)
+    
+    print(f"[DEBUG] Settings from DB: proxy_enabled={settings.get('proxy_enabled')}, proxy_host={settings.get('proxy_host')}")
+    
     # Don't expose password in response
     if settings.get("proxy_password"):
         settings["proxy_password"] = "********"
@@ -407,7 +412,11 @@ def update_settings():
     if not user_id:
         return jsonify({"error": "Invalid user"}), 401
     
+    print(f"[DEBUG] update_settings called for user_id: {user_id}")
+    
     data = request.get_json()
+    
+    print(f"[DEBUG] Received data: proxy_enabled={data.get('proxy_enabled')}, proxy_host={data.get('proxy_host')}")
     
     # Get current settings to preserve password if not provided
     current = get_user_settings(user_id)
@@ -426,7 +435,11 @@ def update_settings():
     else:
         settings["proxy_password"] = current.get("proxy_password")
     
+    print(f"[DEBUG] Saving settings: proxy_enabled={settings.get('proxy_enabled')}, proxy_host={settings.get('proxy_host')}")
+    
     save_user_settings(user_id, settings)
+    
+    print(f"[DEBUG] Settings saved successfully for user_id: {user_id}")
     
     return jsonify({"message": "Settings saved", "settings": settings})
 
@@ -578,3 +591,257 @@ def proxy_check():
     except Exception as e:
         return jsonify({"success": False, "valid": False, "error": str(e)}), 500
 
+
+# ==================== MULTI-PROXY MANAGEMENT ====================
+
+@sheerid_bp.route('/proxies', methods=['GET'])
+@jwt_required()
+def list_proxies():
+    """List all user's saved proxies"""
+    user_id = get_user_id_from_jwt()
+    if not user_id:
+        return jsonify({"error": "Invalid user"}), 401
+    
+    with get_cursor() as cursor:
+        cursor.execute("""
+            SELECT id, name, host, port, username, 
+                   is_active, last_tested_at, last_test_success,
+                   created_at, updated_at
+            FROM user_proxies 
+            WHERE user_id = %s 
+            ORDER BY is_active DESC, created_at DESC
+        """, (user_id,))
+        proxies = [dict(row) for row in cursor.fetchall()]
+    
+    return jsonify({"proxies": proxies})
+
+
+@sheerid_bp.route('/proxies', methods=['POST'])
+@jwt_required()
+def add_proxy():
+    """Add a new proxy"""
+    user_id = get_user_id_from_jwt()
+    if not user_id:
+        return jsonify({"error": "Invalid user"}), 401
+    
+    data = request.get_json()
+    name = data.get("name")
+    host = data.get("host")
+    port = data.get("port")
+    username = data.get("username")
+    password = data.get("password")
+    
+    if not name or not host or not port:
+        return jsonify({"error": "Name, host, and port are required"}), 400
+    
+    with get_cursor() as cursor:
+        cursor.execute("""
+            INSERT INTO user_proxies (user_id, name, host, port, username, password)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            RETURNING id, name, host, port, username, is_active, created_at
+        """, (user_id, name, host, port, username, password))
+        proxy = dict(cursor.fetchone())
+    
+    return jsonify({"message": "Proxy added", "proxy": proxy}), 201
+
+
+@sheerid_bp.route('/proxies/<int:proxy_id>', methods=['PUT'])
+@jwt_required()
+def update_proxy(proxy_id):
+    """Update a proxy"""
+    user_id = get_user_id_from_jwt()
+    if not user_id:
+        return jsonify({"error": "Invalid user"}), 401
+    
+    data = request.get_json()
+    
+    with get_cursor() as cursor:
+        # Check ownership
+        cursor.execute("SELECT id FROM user_proxies WHERE id = %s AND user_id = %s", (proxy_id, user_id))
+        if not cursor.fetchone():
+            return jsonify({"error": "Proxy not found"}), 404
+        
+        # Update fields
+        cursor.execute("""
+            UPDATE user_proxies SET
+                name = COALESCE(%s, name),
+                host = COALESCE(%s, host),
+                port = COALESCE(%s, port),
+                username = %s,
+                password = CASE WHEN %s IS NOT NULL AND %s != '********' THEN %s ELSE password END,
+                updated_at = NOW()
+            WHERE id = %s AND user_id = %s
+            RETURNING id, name, host, port, username, is_active, updated_at
+        """, (
+            data.get("name"), data.get("host"), data.get("port"),
+            data.get("username"),
+            data.get("password"), data.get("password"), data.get("password"),
+            proxy_id, user_id
+        ))
+        proxy = dict(cursor.fetchone())
+    
+    return jsonify({"message": "Proxy updated", "proxy": proxy})
+
+
+@sheerid_bp.route('/proxies/<int:proxy_id>', methods=['DELETE'])
+@jwt_required()
+def delete_proxy(proxy_id):
+    """Delete a proxy"""
+    user_id = get_user_id_from_jwt()
+    if not user_id:
+        return jsonify({"error": "Invalid user"}), 401
+    
+    with get_cursor() as cursor:
+        cursor.execute("DELETE FROM user_proxies WHERE id = %s AND user_id = %s", (proxy_id, user_id))
+        if cursor.rowcount == 0:
+            return jsonify({"error": "Proxy not found"}), 404
+    
+    return jsonify({"message": "Proxy deleted"})
+
+
+@sheerid_bp.route('/proxies/<int:proxy_id>/activate', methods=['POST'])
+@jwt_required()
+def activate_proxy(proxy_id):
+    """Set a proxy as active (deactivates others)"""
+    user_id = get_user_id_from_jwt()
+    if not user_id:
+        return jsonify({"error": "Invalid user"}), 401
+    
+    with get_cursor() as cursor:
+        # Check ownership
+        cursor.execute("SELECT id FROM user_proxies WHERE id = %s AND user_id = %s", (proxy_id, user_id))
+        if not cursor.fetchone():
+            return jsonify({"error": "Proxy not found"}), 404
+        
+        # Deactivate all proxies for this user
+        cursor.execute("UPDATE user_proxies SET is_active = false WHERE user_id = %s", (user_id,))
+        
+        # Activate the selected proxy
+        cursor.execute("""
+            UPDATE user_proxies SET is_active = true, updated_at = NOW()
+            WHERE id = %s AND user_id = %s
+            RETURNING id, name, host, port, is_active
+        """, (proxy_id, user_id))
+        proxy = dict(cursor.fetchone())
+        
+        # Also update sheerid_settings to use this proxy
+        cursor.execute("SELECT host, port, username, password FROM user_proxies WHERE id = %s", (proxy_id,))
+        p = cursor.fetchone()
+        cursor.execute("""
+            INSERT INTO sheerid_settings (user_id, proxy_enabled, proxy_host, proxy_port, proxy_username, proxy_password, updated_at)
+            VALUES (%s, true, %s, %s, %s, %s, NOW())
+            ON CONFLICT (user_id) DO UPDATE SET
+                proxy_enabled = true,
+                proxy_host = EXCLUDED.proxy_host,
+                proxy_port = EXCLUDED.proxy_port,
+                proxy_username = EXCLUDED.proxy_username,
+                proxy_password = EXCLUDED.proxy_password,
+                updated_at = NOW()
+        """, (user_id, p["host"], p["port"], p["username"], p["password"]))
+    
+    return jsonify({"message": "Proxy activated", "proxy": proxy})
+
+
+@sheerid_bp.route('/proxies/<int:proxy_id>/deactivate', methods=['POST'])
+@jwt_required()
+def deactivate_proxy(proxy_id):
+    """Deactivate a proxy"""
+    user_id = get_user_id_from_jwt()
+    if not user_id:
+        return jsonify({"error": "Invalid user"}), 401
+    
+    with get_cursor() as cursor:
+        cursor.execute("""
+            UPDATE user_proxies SET is_active = false, updated_at = NOW()
+            WHERE id = %s AND user_id = %s
+        """, (proxy_id, user_id))
+        
+        if cursor.rowcount == 0:
+            return jsonify({"error": "Proxy not found"}), 404
+        
+        # Also disable proxy in sheerid_settings
+        cursor.execute("""
+            UPDATE sheerid_settings SET proxy_enabled = false, updated_at = NOW()
+            WHERE user_id = %s
+        """, (user_id,))
+    
+    return jsonify({"message": "Proxy deactivated"})
+
+
+@sheerid_bp.route('/proxies/<int:proxy_id>/test', methods=['POST'])
+@jwt_required()
+def test_saved_proxy(proxy_id):
+    """Test a saved proxy"""
+    user_id = get_user_id_from_jwt()
+    if not user_id:
+        return jsonify({"error": "Invalid user"}), 401
+    
+    with get_cursor() as cursor:
+        cursor.execute("""
+            SELECT host, port, username, password 
+            FROM user_proxies WHERE id = %s AND user_id = %s
+        """, (proxy_id, user_id))
+        row = cursor.fetchone()
+        if not row:
+            return jsonify({"error": "Proxy not found"}), 404
+        
+        proxy_host = row["host"]
+        proxy_port = row["port"]
+        proxy_username = row["username"]
+        proxy_password = row["password"]
+    
+    try:
+        import httpx
+        
+        if proxy_username:
+            proxy_url = f"http://{proxy_username}:{proxy_password or ''}@{proxy_host}:{proxy_port}"
+        else:
+            proxy_url = f"http://{proxy_host}:{proxy_port}"
+        
+        client = httpx.Client(proxy=proxy_url, timeout=15)
+        resp = client.get("https://ipapi.co/json/")
+        
+        success = resp.status_code == 200
+        result = {}
+        
+        if success:
+            data = resp.json()
+            result = {
+                "success": True,
+                "valid": True,
+                "ip": data.get("ip"),
+                "city": data.get("city"),
+                "country": data.get("country_name"),
+                "country_code": data.get("country_code"),
+                "isp": data.get("org"),
+                "message": "Proxy is working!"
+            }
+        else:
+            result = {"success": False, "valid": False, "error": f"Status {resp.status_code}"}
+        
+        client.close()
+        
+        # Update test result in database
+        with get_cursor() as cursor:
+            cursor.execute("""
+                UPDATE user_proxies SET 
+                    last_tested_at = NOW(), 
+                    last_test_success = %s,
+                    updated_at = NOW()
+                WHERE id = %s
+            """, (success, proxy_id))
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        # Update test result as failed
+        with get_cursor() as cursor:
+            cursor.execute("""
+                UPDATE user_proxies SET 
+                    last_tested_at = NOW(), 
+                    last_test_success = false,
+                    updated_at = NOW()
+                WHERE id = %s
+            """, (proxy_id,))
+        
+        return jsonify({"success": False, "valid": False, "error": str(e)})

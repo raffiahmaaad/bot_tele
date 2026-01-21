@@ -186,6 +186,30 @@ def update_schema():
             )
         """)
         
+        # ==================== USER PROXIES TABLE ====================
+        print("   Creating user_proxies table for multi-proxy storage...")
+        
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS user_proxies (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                name VARCHAR(100) NOT NULL,
+                host VARCHAR(255) NOT NULL,
+                port INTEGER NOT NULL,
+                username VARCHAR(255),
+                password VARCHAR(255),
+                is_active BOOLEAN DEFAULT false,
+                last_tested_at TIMESTAMP,
+                last_test_success BOOLEAN,
+                created_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP DEFAULT NOW()
+            )
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_user_proxies_user_id 
+            ON user_proxies(user_id)
+        """)
+        
         conn.commit()
         print("✅ Schema updated successfully!")
         return True

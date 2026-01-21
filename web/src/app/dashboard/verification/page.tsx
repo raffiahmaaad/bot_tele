@@ -7,6 +7,7 @@ import api, {
   SheerIDSettings,
   IPLookupResult,
   ProxyCheckResult,
+  UserProxy,
 } from "@/lib/api";
 
 export default function VerificationPage() {
@@ -32,22 +33,25 @@ export default function VerificationPage() {
     error?: string;
   } | null>(null);
 
-  // Settings state
-  const [showSettings, setShowSettings] = useState(false);
-  const [proxyEnabled, setProxyEnabled] = useState(false);
-  const [proxyHost, setProxyHost] = useState("");
-  const [proxyPort, setProxyPort] = useState("");
-  const [proxyUsername, setProxyUsername] = useState("");
-  const [proxyPassword, setProxyPassword] = useState("");
-  const [isSavingSettings, setIsSavingSettings] = useState(false);
+  // Multi-proxy state
+  const [proxies, setProxies] = useState<UserProxy[]>([]);
+  const [showProxyManager, setShowProxyManager] = useState(false);
+  const [showAddProxy, setShowAddProxy] = useState(false);
+  const [editingProxy, setEditingProxy] = useState<UserProxy | null>(null);
+  const [newProxyName, setNewProxyName] = useState("");
+  const [newProxyHost, setNewProxyHost] = useState("");
+  const [newProxyPort, setNewProxyPort] = useState("");
+  const [newProxyUsername, setNewProxyUsername] = useState("");
+  const [newProxyPassword, setNewProxyPassword] = useState("");
+  const [isAddingProxy, setIsAddingProxy] = useState(false);
+  const [testingProxyId, setTestingProxyId] = useState<number | null>(null);
+  const [proxyTestResults, setProxyTestResults] = useState<
+    Record<number, ProxyCheckResult>
+  >({});
 
-  // IP Lookup & Proxy Check state
+  // IP Lookup state
   const [currentIP, setCurrentIP] = useState<IPLookupResult | null>(null);
   const [isLoadingIP, setIsLoadingIP] = useState(false);
-  const [proxyCheckResult, setProxyCheckResult] =
-    useState<ProxyCheckResult | null>(null);
-  const [isCheckingProxy, setIsCheckingProxy] = useState(false);
-  const [settingsAutoSaved, setSettingsAutoSaved] = useState(false);
 
   // Detail modal
   const [selectedVerification, setSelectedVerification] =
@@ -60,11 +64,12 @@ export default function VerificationPage() {
   const fetchData = async () => {
     setIsLoading(true);
     try {
-      const [typesResult, verificationsResult, settingsResult] =
+      const [typesResult, verificationsResult, settingsResult, proxiesResult] =
         await Promise.all([
           api.getSheerIDTypes(),
           api.getSheerIDVerifications(),
           api.getSheerIDSettings(),
+          api.getProxies(),
         ]);
 
       if (typesResult.data?.types) {
@@ -77,13 +82,10 @@ export default function VerificationPage() {
         setVerifications(verificationsResult.data.verifications);
       }
       if (settingsResult.data?.settings) {
-        const s = settingsResult.data.settings;
-        setSettings(s);
-        setProxyEnabled(s.proxy_enabled);
-        setProxyHost(s.proxy_host || "");
-        setProxyPort(s.proxy_port?.toString() || "");
-        setProxyUsername(s.proxy_username || "");
-        setProxyPassword(s.proxy_password || "");
+        setSettings(settingsResult.data.settings);
+      }
+      if (proxiesResult.data?.proxies) {
+        setProxies(proxiesResult.data.proxies);
       }
     } catch (error) {
       console.error("Error fetching data:", error);
@@ -129,21 +131,118 @@ export default function VerificationPage() {
     setIsSubmitting(false);
   };
 
-  const handleSaveSettings = async () => {
-    setIsSavingSettings(true);
-    const result = await api.saveSheerIDSettings({
-      proxy_enabled: proxyEnabled,
-      proxy_host: proxyHost || undefined,
-      proxy_port: proxyPort ? parseInt(proxyPort) : undefined,
-      proxy_username: proxyUsername || undefined,
-      proxy_password: proxyPassword || undefined,
-    });
+  // ==================== MULTI-PROXY HANDLERS ====================
 
-    if (result.data?.settings) {
-      setSettings(result.data.settings);
+  const handleAddProxy = async () => {
+    if (!newProxyName || !newProxyHost || !newProxyPort) return;
+    setIsAddingProxy(true);
+    const result = await api.addProxy({
+      name: newProxyName,
+      host: newProxyHost,
+      port: parseInt(newProxyPort),
+      username: newProxyUsername || undefined,
+      password: newProxyPassword || undefined,
+    });
+    if (result.data?.proxy) {
+      setProxies([result.data.proxy, ...proxies]);
+      resetProxyForm();
+      setShowAddProxy(false);
     }
-    setIsSavingSettings(false);
-    setShowSettings(false);
+    setIsAddingProxy(false);
+  };
+
+  const handleUpdateProxy = async () => {
+    if (!editingProxy || !newProxyName || !newProxyHost || !newProxyPort)
+      return;
+    setIsAddingProxy(true);
+    const result = await api.updateProxy(editingProxy.id, {
+      name: newProxyName,
+      host: newProxyHost,
+      port: parseInt(newProxyPort),
+      username: newProxyUsername || undefined,
+      password: newProxyPassword || undefined,
+    });
+    if (result.data?.proxy) {
+      setProxies(
+        proxies.map((p) => (p.id === editingProxy.id ? result.data!.proxy : p)),
+      );
+      resetProxyForm();
+      setEditingProxy(null);
+    }
+    setIsAddingProxy(false);
+  };
+
+  const handleDeleteProxy = async (proxyId: number) => {
+    if (!confirm("Yakin ingin menghapus proxy ini?")) return;
+    const result = await api.deleteProxy(proxyId);
+    if (result.data) {
+      setProxies(proxies.filter((p) => p.id !== proxyId));
+    }
+  };
+
+  const handleActivateProxy = async (proxyId: number) => {
+    const result = await api.activateProxy(proxyId);
+    if (result.data?.proxy) {
+      setProxies(
+        proxies.map((p) => ({
+          ...p,
+          is_active: p.id === proxyId,
+        })),
+      );
+      // Refresh settings to get updated proxy config
+      const settingsResult = await api.getSheerIDSettings();
+      if (settingsResult.data?.settings) {
+        setSettings(settingsResult.data.settings);
+      }
+    }
+  };
+
+  const handleDeactivateProxy = async (proxyId: number) => {
+    const result = await api.deactivateProxy(proxyId);
+    if (result.data) {
+      setProxies(
+        proxies.map((p) => ({
+          ...p,
+          is_active: false,
+        })),
+      );
+      // Refresh settings
+      const settingsResult = await api.getSheerIDSettings();
+      if (settingsResult.data?.settings) {
+        setSettings(settingsResult.data.settings);
+      }
+    }
+  };
+
+  const handleTestProxy = async (proxyId: number) => {
+    setTestingProxyId(proxyId);
+    const result = await api.testSavedProxy(proxyId);
+    if (result.data) {
+      setProxyTestResults({ ...proxyTestResults, [proxyId]: result.data });
+      // Refresh proxies to get updated test status
+      const proxiesResult = await api.getProxies();
+      if (proxiesResult.data?.proxies) {
+        setProxies(proxiesResult.data.proxies);
+      }
+    }
+    setTestingProxyId(null);
+  };
+
+  const resetProxyForm = () => {
+    setNewProxyName("");
+    setNewProxyHost("");
+    setNewProxyPort("");
+    setNewProxyUsername("");
+    setNewProxyPassword("");
+  };
+
+  const startEditProxy = (proxy: UserProxy) => {
+    setEditingProxy(proxy);
+    setNewProxyName(proxy.name);
+    setNewProxyHost(proxy.host);
+    setNewProxyPort(proxy.port.toString());
+    setNewProxyUsername(proxy.username || "");
+    setNewProxyPassword("");
   };
 
   const handleIPLookup = async () => {
@@ -156,36 +255,7 @@ export default function VerificationPage() {
     setIsLoadingIP(false);
   };
 
-  const handleProxyCheck = async () => {
-    if (!proxyHost || !proxyPort) return;
-    setIsCheckingProxy(true);
-    setProxyCheckResult(null);
-    setSettingsAutoSaved(false);
-    const result = await api.proxyCheck(
-      proxyHost,
-      parseInt(proxyPort),
-      proxyUsername || undefined,
-      proxyPassword || undefined,
-    );
-    if (result.data) {
-      setProxyCheckResult(result.data);
-      // Auto-save settings when proxy test is successful
-      if (result.data.valid) {
-        const saveResult = await api.saveSheerIDSettings({
-          proxy_enabled: proxyEnabled,
-          proxy_host: proxyHost || undefined,
-          proxy_port: proxyPort ? parseInt(proxyPort) : undefined,
-          proxy_username: proxyUsername || undefined,
-          proxy_password: proxyPassword || undefined,
-        });
-        if (saveResult.data?.settings) {
-          setSettings(saveResult.data.settings);
-          setSettingsAutoSaved(true);
-        }
-      }
-    }
-    setIsCheckingProxy(false);
-  };
+  const getActiveProxy = () => proxies.find((p) => p.is_active);
 
   const getSelectedTypeConfig = () => {
     return types.find((t) => t.id === selectedType);
@@ -259,11 +329,13 @@ export default function VerificationPage() {
           </p>
         </div>
         <button
-          onClick={() => setShowSettings(!showSettings)}
+          onClick={() => setShowProxyManager(!showProxyManager)}
           className="px-4 py-2 text-sm font-medium text-[var(--text-secondary)] bg-white/5 rounded-lg hover:bg-white/10 transition-colors flex items-center gap-2"
         >
-          <span>⚙️</span>
-          Proxy Settings
+          <span>🛡️</span>
+          {getActiveProxy()
+            ? `Proxy: ${getActiveProxy()?.name}`
+            : "Manage Proxies"}
         </button>
       </div>
 
@@ -312,16 +384,29 @@ export default function VerificationPage() {
         </div>
       </div>
 
-      {/* Proxy Settings Panel */}
-      {showSettings && (
+      {/* Multi-Proxy Manager Panel */}
+      {showProxyManager && (
         <div className="glass-card p-6">
-          <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-            <span>🛡️</span>
-            Proxy & IP Settings
-          </h3>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold flex items-center gap-2">
+              <span>🛡️</span>
+              My Proxies
+            </h3>
+            <button
+              onClick={() => {
+                resetProxyForm();
+                setShowAddProxy(true);
+                setEditingProxy(null);
+              }}
+              className="px-4 py-2 text-sm font-medium text-white bg-green-500 rounded-lg hover:bg-green-600 transition-colors flex items-center gap-2"
+            >
+              <span>➕</span>
+              Add Proxy
+            </button>
+          </div>
 
           {/* Current IP Display */}
-          <div className="mb-6 p-4 bg-white/5 rounded-lg border border-[var(--border-color)]">
+          <div className="mb-4 p-4 bg-white/5 rounded-lg border border-white/10">
             <div className="flex items-center justify-between mb-2">
               <h4 className="text-sm font-semibold flex items-center gap-2">
                 <span>🌐</span>
@@ -338,196 +423,239 @@ export default function VerificationPage() {
             {currentIP ? (
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
                 <div>
-                  <span className="text-[var(--text-muted)]">IP:</span>
+                  <span className="text-gray-400">IP:</span>
                   <span className="ml-2 font-mono">{currentIP.ip}</span>
                 </div>
                 <div>
-                  <span className="text-[var(--text-muted)]">City:</span>
+                  <span className="text-gray-400">City:</span>
                   <span className="ml-2">{currentIP.city || "-"}</span>
                 </div>
                 <div>
-                  <span className="text-[var(--text-muted)]">Country:</span>
+                  <span className="text-gray-400">Country:</span>
                   <span className="ml-2">{currentIP.country || "-"}</span>
                 </div>
                 <div>
-                  <span className="text-[var(--text-muted)]">ISP:</span>
+                  <span className="text-gray-400">ISP:</span>
                   <span className="ml-2 truncate">{currentIP.isp || "-"}</span>
                 </div>
               </div>
             ) : (
-              <p className="text-sm text-[var(--text-muted)]">
+              <p className="text-sm text-gray-400">
                 Click refresh to check your current IP
               </p>
             )}
           </div>
 
-          <p className="text-sm text-[var(--text-muted)] mb-4">
-            Gunakan residential proxy untuk hasil terbaik. Proxy akan digunakan
-            untuk anti-detection.
-          </p>
-
-          <div className="space-y-4">
-            {/* Enable Toggle */}
-            <div className="flex items-center justify-between">
-              <label className="text-sm font-medium">Enable Proxy</label>
-              <button
-                onClick={() => setProxyEnabled(!proxyEnabled)}
-                className={`w-12 h-6 rounded-full transition-colors ${
-                  proxyEnabled ? "bg-green-500" : "bg-gray-600"
-                }`}
-              >
-                <div
-                  className={`w-5 h-5 bg-white rounded-full transition-transform ${
-                    proxyEnabled ? "translate-x-6" : "translate-x-0.5"
-                  }`}
-                />
-              </button>
-            </div>
-
-            {proxyEnabled && (
-              <>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium mb-1">
-                      Host
-                    </label>
-                    <input
-                      type="text"
-                      value={proxyHost}
-                      onChange={(e) => setProxyHost(e.target.value)}
-                      placeholder="proxy.example.com"
-                      className="w-full px-3 py-2 bg-white/5 border border-[var(--border-color)] rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-1">
-                      Port
-                    </label>
-                    <input
-                      type="number"
-                      value={proxyPort}
-                      onChange={(e) => setProxyPort(e.target.value)}
-                      placeholder="8080"
-                      className="w-full px-3 py-2 bg-white/5 border border-[var(--border-color)] rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-1">
-                      Username (optional)
-                    </label>
-                    <input
-                      type="text"
-                      value={proxyUsername}
-                      onChange={(e) => setProxyUsername(e.target.value)}
-                      placeholder="username"
-                      className="w-full px-3 py-2 bg-white/5 border border-[var(--border-color)] rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-1">
-                      Password (optional)
-                    </label>
-                    <input
-                      type="password"
-                      value={proxyPassword}
-                      onChange={(e) => setProxyPassword(e.target.value)}
-                      placeholder="••••••••"
-                      className="w-full px-3 py-2 bg-white/5 border border-[var(--border-color)] rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                    />
-                  </div>
+          {/* Add/Edit Proxy Form */}
+          {(showAddProxy || editingProxy) && (
+            <div className="mb-4 p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+              <h4 className="text-sm font-semibold mb-3 text-blue-400">
+                {editingProxy ? "✏️ Edit Proxy" : "➕ Add New Proxy"}
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium mb-1">
+                    Name *
+                  </label>
+                  <input
+                    type="text"
+                    value={newProxyName}
+                    onChange={(e) => setNewProxyName(e.target.value)}
+                    placeholder="My US Proxy"
+                    className="w-full px-3 py-2 text-sm bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
                 </div>
+                <div>
+                  <label className="block text-xs font-medium mb-1">
+                    Host *
+                  </label>
+                  <input
+                    type="text"
+                    value={newProxyHost}
+                    onChange={(e) => setNewProxyHost(e.target.value)}
+                    placeholder="proxy.example.com"
+                    className="w-full px-3 py-2 text-sm bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium mb-1">
+                    Port *
+                  </label>
+                  <input
+                    type="number"
+                    value={newProxyPort}
+                    onChange={(e) => setNewProxyPort(e.target.value)}
+                    placeholder="8080"
+                    className="w-full px-3 py-2 text-sm bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium mb-1">
+                    Username
+                  </label>
+                  <input
+                    type="text"
+                    value={newProxyUsername}
+                    onChange={(e) => setNewProxyUsername(e.target.value)}
+                    placeholder="username"
+                    className="w-full px-3 py-2 text-sm bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="block text-xs font-medium mb-1">
+                    Password
+                  </label>
+                  <input
+                    type="password"
+                    value={newProxyPassword}
+                    onChange={(e) => setNewProxyPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="w-full px-3 py-2 text-sm bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end gap-2 mt-3">
+                <button
+                  onClick={() => {
+                    setShowAddProxy(false);
+                    setEditingProxy(null);
+                    resetProxyForm();
+                  }}
+                  className="px-3 py-1.5 text-sm text-gray-400 hover:text-white transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={editingProxy ? handleUpdateProxy : handleAddProxy}
+                  disabled={
+                    isAddingProxy ||
+                    !newProxyName ||
+                    !newProxyHost ||
+                    !newProxyPort
+                  }
+                  className="px-4 py-1.5 text-sm font-medium text-white bg-blue-500 rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50"
+                >
+                  {isAddingProxy
+                    ? "Saving..."
+                    : editingProxy
+                      ? "Update"
+                      : "Add Proxy"}
+                </button>
+              </div>
+            </div>
+          )}
 
-                {/* Proxy Check Button & Result */}
-                <div className="p-4 bg-blue-500/10 border border-blue-500/20 rounded-lg">
-                  <div className="flex items-center justify-between mb-3">
-                    <h4 className="text-sm font-semibold flex items-center gap-2 text-blue-400">
-                      <span>🔍</span>
-                      Test Proxy Connection
-                    </h4>
-                    <button
-                      onClick={handleProxyCheck}
-                      disabled={isCheckingProxy || !proxyHost || !proxyPort}
-                      className="px-4 py-2 text-sm font-medium text-white bg-blue-500 rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50"
-                    >
-                      {isCheckingProxy ? "Checking..." : "🧪 Test Proxy"}
-                    </button>
+          {/* Proxy List */}
+          {proxies.length === 0 ? (
+            <div className="text-center py-8 text-gray-400">
+              <div className="text-4xl mb-2">🛡️</div>
+              <p>No proxies saved yet</p>
+              <p className="text-sm">Add a proxy to get started</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {proxies.map((proxy) => (
+                <div
+                  key={proxy.id}
+                  className={`p-4 rounded-lg border transition-all ${
+                    proxy.is_active
+                      ? "bg-green-500/10 border-green-500/30"
+                      : "bg-white/5 border-white/10"
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium">{proxy.name}</span>
+                          {proxy.is_active && (
+                            <span className="px-2 py-0.5 text-xs font-medium bg-green-500/20 text-green-400 rounded-full">
+                              Active
+                            </span>
+                          )}
+                          {proxy.last_test_success !== null && (
+                            <span
+                              className={`text-xs ${proxy.last_test_success ? "text-green-400" : "text-red-400"}`}
+                            >
+                              {proxy.last_test_success ? "✅" : "❌"}
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-sm text-gray-400 font-mono">
+                          {proxy.host}:{proxy.port}
+                          {proxy.username && ` (${proxy.username})`}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleTestProxy(proxy.id)}
+                        disabled={testingProxyId === proxy.id}
+                        className="px-3 py-1.5 text-xs font-medium text-blue-400 bg-blue-500/10 rounded-lg hover:bg-blue-500/20 transition-colors disabled:opacity-50"
+                      >
+                        {testingProxyId === proxy.id ? "Testing..." : "🧪 Test"}
+                      </button>
+                      {proxy.is_active ? (
+                        <button
+                          onClick={() => handleDeactivateProxy(proxy.id)}
+                          className="px-3 py-1.5 text-xs font-medium text-yellow-400 bg-yellow-500/10 rounded-lg hover:bg-yellow-500/20 transition-colors"
+                        >
+                          ⏸️ Deactivate
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handleActivateProxy(proxy.id)}
+                          className="px-3 py-1.5 text-xs font-medium text-green-400 bg-green-500/10 rounded-lg hover:bg-green-500/20 transition-colors"
+                        >
+                          ✅ Activate
+                        </button>
+                      )}
+                      <button
+                        onClick={() => startEditProxy(proxy)}
+                        className="px-3 py-1.5 text-xs font-medium text-gray-400 bg-white/5 rounded-lg hover:bg-white/10 transition-colors"
+                      >
+                        ✏️
+                      </button>
+                      <button
+                        onClick={() => handleDeleteProxy(proxy.id)}
+                        className="px-3 py-1.5 text-xs font-medium text-red-400 bg-red-500/10 rounded-lg hover:bg-red-500/20 transition-colors"
+                      >
+                        🗑️
+                      </button>
+                    </div>
                   </div>
 
-                  {proxyCheckResult && (
+                  {/* Test Result */}
+                  {proxyTestResults[proxy.id] && (
                     <div
-                      className={`mt-3 p-3 rounded-lg ${
-                        proxyCheckResult.valid
-                          ? "bg-green-500/10 border border-green-500/30"
-                          : "bg-red-500/10 border border-red-500/30"
+                      className={`mt-3 p-2 rounded text-sm ${
+                        proxyTestResults[proxy.id].valid
+                          ? "bg-green-500/10 text-green-400"
+                          : "bg-red-500/10 text-red-400"
                       }`}
                     >
-                      {proxyCheckResult.valid ? (
-                        <div>
-                          <div className="flex items-center gap-2 text-green-400 font-medium mb-2">
-                            <span>✅</span>
-                            <span>Proxy is working!</span>
-                            {settingsAutoSaved && (
-                              <span className="text-xs bg-green-500/20 px-2 py-0.5 rounded-full">
-                                💾 Auto-saved
-                              </span>
-                            )}
-                          </div>
-                          <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
-                            <div>
-                              <span className="text-[var(--text-muted)]">
-                                Proxy IP:
-                              </span>
-                              <span className="ml-2 font-mono">
-                                {proxyCheckResult.ip}
-                              </span>
-                            </div>
-                            <div>
-                              <span className="text-[var(--text-muted)]">
-                                City:
-                              </span>
-                              <span className="ml-2">
-                                {proxyCheckResult.city || "-"}
-                              </span>
-                            </div>
-                            <div>
-                              <span className="text-[var(--text-muted)]">
-                                Country:
-                              </span>
-                              <span className="ml-2">
-                                {proxyCheckResult.country || "-"}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
+                      {proxyTestResults[proxy.id].valid ? (
+                        <span>
+                          ✅ Working! IP: {proxyTestResults[proxy.id].ip} (
+                          {proxyTestResults[proxy.id].country})
+                        </span>
                       ) : (
-                        <div className="flex items-center gap-2 text-red-400">
-                          <span>❌</span>
-                          <span>
-                            {proxyCheckResult.error || "Proxy check failed"}
-                          </span>
-                        </div>
+                        <span>❌ {proxyTestResults[proxy.id].error}</span>
                       )}
                     </div>
                   )}
                 </div>
-              </>
-            )}
-
-            <div className="flex justify-end gap-2 pt-2">
-              <button
-                onClick={() => setShowSettings(false)}
-                className="px-4 py-2 text-sm font-medium text-[var(--text-secondary)] bg-white/5 rounded-lg hover:bg-white/10 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSaveSettings}
-                disabled={isSavingSettings}
-                className="px-4 py-2 text-sm font-medium text-white bg-green-500 rounded-lg hover:bg-green-600 transition-colors disabled:opacity-50"
-              >
-                {isSavingSettings ? "Saving..." : "💾 Save Settings"}
-              </button>
+              ))}
             </div>
+          )}
+
+          <div className="flex justify-end mt-4">
+            <button
+              onClick={() => setShowProxyManager(false)}
+              className="px-4 py-2 text-sm font-medium text-gray-400 bg-white/5 rounded-lg hover:bg-white/10 transition-colors"
+            >
+              Close
+            </button>
           </div>
         </div>
       )}
