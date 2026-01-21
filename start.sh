@@ -1,6 +1,6 @@
 #!/bin/bash
 echo "=========================================="
-echo "BotStore Backend API"
+echo "BotStore Backend + Bot Runner"
 echo "=========================================="
 
 mkdir -p logs
@@ -24,6 +24,13 @@ if [ -f "scripts/update_schema.py" ]; then
     python update_schema.py 2>/dev/null || echo "Schema update skipped"
     cd ..
 fi
+
+echo ""
+echo "Starting Telegram Bot Runner in background..."
+echo "=========================================="
+python main.py > logs/bot.log 2>&1 &
+BOT_PID=$!
+echo "Bot Runner started with PID: $BOT_PID"
 
 echo ""
 echo "Starting Backend API on port $PORT..."
