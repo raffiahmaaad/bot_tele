@@ -193,6 +193,32 @@ class ApiClient {
     });
   }
 
+  // ==================== CATEGORIES ====================
+
+  async getCategories(botId: number) {
+    return this.request<{ categories: any[] }>(`/bots/${botId}/categories`);
+  }
+
+  async createCategory(botId: number, data: { name: string; description?: string }) {
+    return this.request<{ category: any }>(`/bots/${botId}/categories`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateCategory(categoryId: number, data: { name?: string; description?: string; is_active?: boolean; sort_order?: number }) {
+    return this.request<{ category: any }>(`/categories/${categoryId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteCategory(categoryId: number) {
+    return this.request<{ message: string }>(`/categories/${categoryId}`, {
+      method: 'DELETE',
+    });
+  }
+
   // ==================== TRANSACTIONS ====================
 
   async getTransactions(botId: number) {

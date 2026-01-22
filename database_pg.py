@@ -1,15 +1,18 @@
 """
 Database connection for Bot Runner.
 Connects to the same PostgreSQL database as the API.
+Uses connection pooling for fast response times.
 """
 
 import os
 import psycopg2
+from psycopg2.pool import ThreadedConnectionPool
 from psycopg2.extras import RealDictCursor
 from contextlib import contextmanager
 from datetime import datetime
 from typing import Optional
 from dotenv import load_dotenv
+import logging
 
 load_dotenv()
 
@@ -18,11 +21,53 @@ DATABASE_URL = os.getenv("DATABASE_URL", "")
 # Owner Telegram ID - has unlimited points
 OWNER_TELEGRAM_ID = int(os.getenv("OWNER_TELEGRAM_ID", "0"))
 
+# Global connection pool
+_connection_pool: Optional[ThreadedConnectionPool] = None
+_pool_logger = logging.getLogger("db_pool")
+
+
+def init_connection_pool(minconn: int = 2, maxconn: int = 10):
+    """
+    Initialize the database connection pool.
+    Call this once at application startup for faster database operations.
+    
+    Args:
+        minconn: Minimum connections to keep in pool (default: 2)
+        maxconn: Maximum connections allowed in pool (default: 10)
+    """
+    global _connection_pool
+    if _connection_pool is None:
+        try:
+            _connection_pool = ThreadedConnectionPool(
+                minconn=minconn,
+                maxconn=maxconn,
+                dsn=DATABASE_URL
+            )
+            _pool_logger.info(f"Connection pool initialized (min={minconn}, max={maxconn})")
+        except Exception as e:
+            _pool_logger.error(f"Failed to initialize connection pool: {e}")
+            raise
+
+
+def close_connection_pool():
+    """Close all connections in the pool. Call on application shutdown."""
+    global _connection_pool
+    if _connection_pool:
+        _connection_pool.closeall()
+        _connection_pool = None
+        _pool_logger.info("Connection pool closed")
+
 
 @contextmanager
 def get_connection():
-    """Get database connection with context manager."""
-    conn = psycopg2.connect(DATABASE_URL)
+    """Get database connection from pool with context manager."""
+    global _connection_pool
+    
+    # Initialize pool on first use if not already done
+    if _connection_pool is None:
+        init_connection_pool()
+    
+    conn = _connection_pool.getconn()
     try:
         yield conn
         conn.commit()
@@ -30,7 +75,8 @@ def get_connection():
         conn.rollback()
         raise
     finally:
-        conn.close()
+        # Return connection to pool instead of closing
+        _connection_pool.putconn(conn)
 
 
 @contextmanager
@@ -116,6 +162,105 @@ def get_bot_user(bot_id: int, telegram_id: int) -> Optional[dict]:
         """, (bot_id, telegram_id))
         row = cursor.fetchone()
         return dict(row) if row else None
+
+
+def get_store_stats(bot_id: int) -> dict:
+    """Get store statistics: total users and completed transactions."""
+    with get_cursor() as cursor:
+        cursor.execute("""
+            SELECT 
+                (SELECT COUNT(*) FROM bot_users WHERE bot_id = %s) as total_users,
+                (SELECT COUNT(*) FROM orders WHERE bot_id = %s AND status = 'paid') as total_transactions,
+                (SELECT COALESCE(SUM(amount), 0) FROM orders WHERE bot_id = %s AND status = 'paid') as total_revenue
+        """, (bot_id, bot_id, bot_id))
+        row = cursor.fetchone()
+        return dict(row) if row else {'total_users': 0, 'total_transactions': 0, 'total_revenue': 0}
+
+
+def get_leaderboard(bot_id: int, limit: int = 10) -> list[dict]:
+    """Get top buyers leaderboard."""
+    with get_cursor() as cursor:
+        cursor.execute("""
+            SELECT 
+                bu.username, bu.first_name, bu.telegram_id,
+                COUNT(o.id) as total_orders,
+                COALESCE(SUM(o.amount), 0) as total_spent
+            FROM bot_users bu
+            LEFT JOIN orders o ON bu.id = o.bot_user_id AND o.status = 'paid'
+            WHERE bu.bot_id = %s
+            GROUP BY bu.id, bu.username, bu.first_name, bu.telegram_id
+            HAVING COUNT(o.id) > 0
+            ORDER BY total_spent DESC, total_orders DESC
+            LIMIT %s
+        """, (bot_id, limit))
+        return [dict(row) for row in cursor.fetchall()]
+
+
+def get_user_balance(bot_id: int, telegram_id: int) -> int:
+    """Get user's deposit balance."""
+    with get_cursor() as cursor:
+        cursor.execute("""
+            SELECT COALESCE(balance, 0) as balance FROM bot_users
+            WHERE bot_id = %s AND telegram_id = %s
+        """, (bot_id, telegram_id))
+        row = cursor.fetchone()
+        return row['balance'] if row else 0
+
+
+def add_user_balance(bot_id: int, telegram_id: int, amount: int) -> bool:
+    """Add balance to user's account."""
+    with get_cursor() as cursor:
+        cursor.execute("""
+            UPDATE bot_users SET balance = COALESCE(balance, 0) + %s
+            WHERE bot_id = %s AND telegram_id = %s
+        """, (amount, bot_id, telegram_id))
+        return cursor.rowcount > 0
+
+
+def deduct_user_balance(bot_id: int, telegram_id: int, amount: int) -> bool:
+    """Deduct balance from user's account. Returns False if insufficient."""
+    with get_cursor() as cursor:
+        cursor.execute("""
+            UPDATE bot_users SET balance = balance - %s
+            WHERE bot_id = %s AND telegram_id = %s AND balance >= %s
+        """, (amount, bot_id, telegram_id, amount))
+        return cursor.rowcount > 0
+
+
+def create_deposit(bot_id: int, telegram_id: int, order_id: str, amount: int, 
+                   fee: int, total: int, qris_string: str, expired_at=None) -> dict:
+    """Create a deposit transaction record."""
+    with get_cursor() as cursor:
+        cursor.execute("""
+            INSERT INTO deposits (bot_id, telegram_id, order_id, amount, fee, total, qris_string, expired_at, status)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'pending')
+            RETURNING *
+        """, (bot_id, telegram_id, order_id, amount, fee, total, qris_string, expired_at))
+        return dict(cursor.fetchone())
+
+
+def get_deposit_by_order_id(order_id: str) -> Optional[dict]:
+    """Get deposit by order ID."""
+    with get_cursor() as cursor:
+        cursor.execute("""
+            SELECT * FROM deposits WHERE order_id = %s
+        """, (order_id,))
+        row = cursor.fetchone()
+        return dict(row) if row else None
+
+
+def update_deposit_status(order_id: str, status: str, paid_at=None) -> bool:
+    """Update deposit status."""
+    with get_cursor() as cursor:
+        if paid_at:
+            cursor.execute("""
+                UPDATE deposits SET status = %s, paid_at = %s WHERE order_id = %s
+            """, (status, paid_at, order_id))
+        else:
+            cursor.execute("""
+                UPDATE deposits SET status = %s WHERE order_id = %s
+            """, (status, order_id))
+        return cursor.rowcount > 0
 
 
 # ==================== CATEGORY OPERATIONS ====================

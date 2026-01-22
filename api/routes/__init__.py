@@ -9,6 +9,7 @@ from .transactions import transactions_bp
 from .broadcast import broadcast_bp
 from .sheerid import sheerid_bp
 from .commands import commands_bp
+from .categories import categories_bp
 
 __all__ = [
     'auth_bp',
@@ -18,5 +19,6 @@ __all__ = [
     'broadcast_bp',
     'sheerid_bp',
     'commands_bp',
+    'categories_bp',
 ]
 

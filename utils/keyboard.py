@@ -6,28 +6,82 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from typing import List, Tuple
 
 
-def create_menu_keyboard() -> InlineKeyboardMarkup:
-    """Create main menu keyboard."""
-    keyboard = [
-        [
-            InlineKeyboardButton("📦 Katalog Produk", callback_data="menu_catalog"),
-            InlineKeyboardButton("📋 Pesanan Saya", callback_data="menu_orders"),
-        ],
-        [InlineKeyboardButton("ℹ️ Bantuan", callback_data="menu_help")],
-    ]
+def create_menu_keyboard(categories: list = None, balance: int = 0) -> InlineKeyboardMarkup:
+    """Create main menu keyboard with ChenStore-style category buttons."""
+    keyboard = []
+    
+    # Category buttons in grid (3 per row) - like ChenStore
+    if categories:
+        row = []
+        for i, cat in enumerate(categories):
+            row.append(InlineKeyboardButton(cat['name'], callback_data=f"cat_{cat['id']}"))
+            if len(row) == 3:
+                keyboard.append(row)
+                row = []
+        if row:  # Add remaining buttons
+            keyboard.append(row)
+    
+    # Menu buttons row
+    keyboard.append([
+        InlineKeyboardButton("📂 Uncategory", callback_data="menu_uncategory"),
+        InlineKeyboardButton("🏆 Leaderboard", callback_data="menu_leaderboard"),
+        InlineKeyboardButton("📦 Semua Produk", callback_data="menu_all_products"),
+    ])
+    
+    # Balance and deposit row
+    balance_str = f"Rp {balance:,}".replace(",", ".")
+    keyboard.append([
+        InlineKeyboardButton(f"💰 Saldo: {balance_str}", callback_data="menu_balance"),
+        InlineKeyboardButton("➕ Deposit", callback_data="menu_deposit"),
+    ])
+    
+    # Bottom row
+    keyboard.append([
+        InlineKeyboardButton("📋 Pesanan Saya", callback_data="menu_orders"),
+        InlineKeyboardButton("ℹ️ Bantuan", callback_data="menu_help"),
+    ])
+    
     return InlineKeyboardMarkup(keyboard)
 
 
-def create_admin_menu_keyboard() -> InlineKeyboardMarkup:
-    """Create admin menu keyboard."""
-    keyboard = [
-        [
-            InlineKeyboardButton("📦 Katalog Produk", callback_data="menu_catalog"),
-            InlineKeyboardButton("📋 Pesanan Saya", callback_data="menu_orders"),
-        ],
-        [InlineKeyboardButton("ℹ️ Bantuan", callback_data="menu_help")],
-        [InlineKeyboardButton("⚙️ Admin Panel", callback_data="admin_menu")],
-    ]
+def create_admin_menu_keyboard(categories: list = None, balance: int = 0) -> InlineKeyboardMarkup:
+    """Create admin menu keyboard with ChenStore-style + admin panel."""
+    keyboard = []
+    
+    # Category buttons in grid (3 per row)
+    if categories:
+        row = []
+        for i, cat in enumerate(categories):
+            row.append(InlineKeyboardButton(cat['name'], callback_data=f"cat_{cat['id']}"))
+            if len(row) == 3:
+                keyboard.append(row)
+                row = []
+        if row:
+            keyboard.append(row)
+    
+    # Menu buttons row
+    keyboard.append([
+        InlineKeyboardButton("📂 Uncategory", callback_data="menu_uncategory"),
+        InlineKeyboardButton("🏆 Leaderboard", callback_data="menu_leaderboard"),
+        InlineKeyboardButton("📦 Semua Produk", callback_data="menu_all_products"),
+    ])
+    
+    # Balance and deposit row
+    balance_str = f"Rp {balance:,}".replace(",", ".")
+    keyboard.append([
+        InlineKeyboardButton(f"💰 Saldo: {balance_str}", callback_data="menu_balance"),
+        InlineKeyboardButton("➕ Deposit", callback_data="menu_deposit"),
+    ])
+    
+    # Bottom row
+    keyboard.append([
+        InlineKeyboardButton("📋 Pesanan Saya", callback_data="menu_orders"),
+        InlineKeyboardButton("ℹ️ Bantuan", callback_data="menu_help"),
+    ])
+    
+    # Admin panel
+    keyboard.append([InlineKeyboardButton("⚙️ Admin Panel", callback_data="admin_menu")])
+    
     return InlineKeyboardMarkup(keyboard)
 
 

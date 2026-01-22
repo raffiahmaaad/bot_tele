@@ -1,6 +1,7 @@
 """
 Store Bot Handlers Package.
 Handlers for digital product store bot type.
+ChenStore-style UI with stats, deposit, and leaderboard.
 """
 
 from telegram.ext import (
@@ -11,7 +12,10 @@ from telegram.ext import (
     filters
 )
 
-from .start import start_command, back_to_menu, help_menu
+from .start import (
+    start_command, back_to_menu, help_menu,
+    show_leaderboard, show_balance, show_all_products
+)
 from .catalog import show_catalog, show_category_products, show_product_detail
 from .order import (
     show_buy_confirmation,
@@ -19,6 +23,12 @@ from .order import (
     check_payment_status,
     cancel_payment,
     show_my_orders
+)
+from .deposit import (
+    show_deposit_menu,
+    process_deposit,
+    check_deposit_status,
+    cancel_deposit
 )
 from .admin import (
     admin_menu,
@@ -98,7 +108,7 @@ def get_all_store_handlers(bot_id: int) -> list:
     
     # Admin menu and callbacks
     handlers.extend([
-        CallbackQueryHandler(admin_menu, pattern="^menu_admin$"),
+        CallbackQueryHandler(admin_menu, pattern="^admin_menu$"),
         CallbackQueryHandler(admin_categories, pattern="^admin_categories$"),
         CallbackQueryHandler(admin_category_detail, pattern="^admin_cat_\\d+$"),
         CallbackQueryHandler(admin_category_toggle, pattern="^admin_cat_toggle_\\d+$"),
@@ -116,6 +126,9 @@ def get_all_store_handlers(bot_id: int) -> list:
         CommandHandler("start", start_command),
         CallbackQueryHandler(back_to_menu, pattern="^back_menu$"),
         CallbackQueryHandler(help_menu, pattern="^menu_help$"),
+        CallbackQueryHandler(show_leaderboard, pattern="^menu_leaderboard$"),
+        CallbackQueryHandler(show_balance, pattern="^menu_balance$"),
+        CallbackQueryHandler(show_all_products, pattern="^menu_all_products$"),
     ])
     
     # === CATALOG HANDLERS ===
@@ -132,6 +145,14 @@ def get_all_store_handlers(bot_id: int) -> list:
         CallbackQueryHandler(check_payment_status, pattern="^check_[A-Z0-9]+$"),
         CallbackQueryHandler(cancel_payment, pattern="^cancel_[A-Z0-9]+$"),
         CallbackQueryHandler(show_my_orders, pattern="^menu_orders$"),
+    ])
+    
+    # === DEPOSIT HANDLERS ===
+    handlers.extend([
+        CallbackQueryHandler(show_deposit_menu, pattern="^menu_deposit$"),
+        CallbackQueryHandler(process_deposit, pattern="^deposit_\\d+$"),
+        CallbackQueryHandler(check_deposit_status, pattern="^dep_check_[A-Z0-9]+$"),
+        CallbackQueryHandler(cancel_deposit, pattern="^dep_cancel_[A-Z0-9]+$"),
     ])
     
     return handlers
